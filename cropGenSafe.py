@@ -79,11 +79,10 @@ class Rectangle():
         self.areaDeNorm = self.widthDeNorm * self.heightDeNorm
 
 # ============================================================================== CropImage object
-#class CropImage():
-#   global cropDim
-#   def __init__(self,topLx,topLy,botRx,botRy):
-#       self.imgWidth = 0
-#       self.imgHeight = 0
+class CropImage():
+    def __init__(self,startXcrop,startYcrop):
+        self.newOriginX = startXcrop
+        self.newOriginY = startYcrop
 
 
 # ============================================================================== SrcImage object
@@ -95,11 +94,13 @@ class SrcImage():
         self.srcLabel = sourceAddr + "/labels/" + srcClip.rstrip('.png') + ".txt"
         self.clusterNum = clusterNum
         self.rectsFetched = []
+        self.clipsCropped = []
         self.rectsCropped = []
         self.imgWidth = 0
         self.imgHeight = 0
         self.imgWindow = cv2.imread(self.srcClip)
-        cv2.imwrite("Original_" + str(countup) +".png", self.imgWindow)
+        self.cropWindow = None
+        #cv2.imwrite("Original_" + str(countup) +".png", self.imgWindow)
 
 # ------------------------------------------------------------------------- print image info
     def __str__(self):
@@ -132,7 +133,7 @@ class SrcImage():
     def denormalizeRectsFetched(self):
         for rectangle in self.rectsFetched:
             rectangle.denormalize(self.imgHeight, self.imgWidth)
-            print rectangle
+            #print rectangle
 
     def bboxAreaLimit(self):
         for rectangle in self.rectsFetched:
@@ -140,37 +141,63 @@ class SrcImage():
                 return True
         return False
 
+    def createClusterDir(self):
+        clusterDirName = topDirName + "/cluster" + self.clusterNum
+        if (os.path.isdir(clusterDirName) is False):
+            print "> " + clusterDirName + " doesn't exist! Creating " + clusterDirName
+            os.makedirs(clusterDirName)
+            os.makedirs(clusterDirName + "/images")
+            os.makedirs(clusterDirName + "/labels")
+
     def createCroppedImg(self):
         for rectangle in self.rectsFetched:
             #check top and bot of image
             if ((rectangle.midYDeNorm-(cropDim/2)) < 0):
                 startYcrop = 0
-                endYcrop = cropDim
             elif ((rectangle.midYDeNorm+(cropDim/2)) > self.imgHeight):
                 startYcrop = self.imgHeight - cropDim
-                endYcrop = self.imgHeight
             else:
                 startYcrop = rectangle.midYDeNorm-(cropDim/2)
-                endYcrop = rectangle.midYDeNorm+(cropDim/2)
 
             #check left and right of image
             if ((rectangle.midXDeNorm-(cropDim/2)) < 0):
                 startXcrop = 0
-                endXcrop = cropDim
             elif ((rectangle.midXDeNorm+(cropDim/2)) > self.imgWidth):
                 startXcrop = self.imgWidth - cropDim
-                endXcrop = self.imgWidth
             else:
                 startXcrop = rectangle.midXDeNorm-(cropDim/2)
-                endXcrop = rectangle.midXDeNorm+(cropDim/2)
 
-            cropped = self.imgWindow[startYcrop:endYcrop, startXcrop:endXcrop]
-            cv2.imwrite("Cropped_" + str(countup) +".png", cropped)
+            self.cropWindow = self.imgWindow[startYcrop:(startYcrop+cropDim), startXcrop:(startXcrop+cropDim)]
+            croppedImg = CropImage(startXcrop,startYcrop)
+            self.clipsCropped.append(croppedImg)
+            #cv2.imwrite("Cropped_" + str(countup) +".png", self.cropWindow)
             #print startXcrop
             #print startYcrop
-            #print endXcrop
-            #print endYcrop
 
+    def createNewBboxVals(self):
+        for index in range(0,len(self.rectsFetched)):
+            newCentXDeNorm = self.rectsFetched[index].midXDeNorm - self.clipsCropped[index].newOriginX
+            newCentYDeNorm = self.rectsFetched[index].midYDeNorm - self.clipsCropped[index].newOriginY
+            #print newCentX
+            #print newCentY
+            #newBbox = self.cropWindow[(newCentY-self.rectsFetched[index].heightDeNorm/2):(newCentY+self.rectsFetched[index].heightDeNorm/2), (newCentX-self.rectsFetched[index].widthDeNorm/2):(newCentX+self.rectsFetched[index].widthDeNorm/2)]
+            #cv2.imwrite("BBox_" + str(countup) +".png", newBbox)
+            newBbox = Rectangle(newCentXDeNorm, newCentYDeNorm, self.rectsFetched[index].widthDeNorm, self.rectsFetched[index].heightDeNorm, False)
+            self.rectsCropped.append(newBbox)
+
+    def normalizeNewBboxes(self):
+        for rectangle in self.rectsCropped:
+            rectangle.normalize(cropDim,cropDim)
+            print rectangle
+
+    def saveNewLabels(self):
+        savingFile = open("Cropped_" + str(countup) +".txt", "wb")
+        for rectangle in self.rectsCropped:
+            item = str(self.clusterNum) + " " + str(rectangle.midXNorm) + " " + str(rectangle.midYNorm) + " " + str(rectangle.widthNorm) + " " + str(rectangle.heightNorm)
+            savingFile.write("%s\n" % item)
+            break
+
+        savingFile.close()
 
 # #######################################################################################   MAIN CODE START
 # ---------------------------------------------------------------- take in arguments
@@ -200,14 +227,18 @@ with open(addrCsvSource, 'rb') as f:
         #print sourceAddr + row[0] + " " + row[1]
         currentClip = SrcImage(row[0],row[1])
         currentClip.setOrigImgDim()
-        print currentClip
+        #print currentClip
         currentClip.readContent()
         currentClip.denormalizeRectsFetched()
         if (currentClip.bboxAreaLimit()):
             continue
+        currentClip.createClusterDir()
         currentClip.createCroppedImg()
-        
-        if (countup > 1):
+        currentClip.createNewBboxVals()
+        currentClip.normalizeNewBboxes()
+        currentClip.saveNewLabels()
+
+        if (countup > 5):
             break
         else:
             countup += 1
