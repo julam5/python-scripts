@@ -89,9 +89,12 @@ class CropImage():
 class SrcImage():
     global sourceAddr, cropDim, countup, minBboxArea
 # ------------------------------------------------------------------------- creates the Img object
-    def __init__(self, srcClip, clusterNum):                                         
+    def __init__(self, srcClip, clusterNum):   
+        self.dirClip = os.path.dirname(srcClip)                                      
         self.srcClip = sourceAddr + "/images/" + srcClip
         self.srcLabel = sourceAddr + "/labels/" + srcClip.rstrip('.png') + ".txt"
+        self.dstClip = None
+        self.dstLabel = None
         self.clusterNum = clusterNum
         self.rectsFetched = []
         self.clipsCropped = []
@@ -149,6 +152,15 @@ class SrcImage():
             os.makedirs(clusterDirName + "/images")
             os.makedirs(clusterDirName + "/labels")
 
+        if (os.path.isdir(clusterDirName + "/images" + "/" + self.dirClip) is False):
+            os.makedirs(clusterDirName + "/images" + "/" + self.dirClip)    
+            os.makedirs(clusterDirName + "/labels" + "/" + self.dirClip)
+
+        self.dstClip = clusterDirName + "/images" + "/" + self.dirClip
+        self.dstLabel = clusterDirName + "/labels" + "/" + self.dirClip
+        #print self.dstClip
+        #print self.dstLabel
+
     def createCroppedImg(self):
         for rectangle in self.rectsFetched:
             #check top and bot of image
@@ -188,7 +200,7 @@ class SrcImage():
     def normalizeNewBboxes(self):
         for rectangle in self.rectsCropped:
             rectangle.normalize(cropDim,cropDim)
-            print rectangle
+            #print rectangle
 
     def saveNewLabels(self):
         savingFile = open("Cropped_" + str(countup) +".txt", "wb")
@@ -224,7 +236,6 @@ if (os.path.isdir(topDirName) is False):
 with open(addrCsvSource, 'rb') as f:
     reader = csv.reader(f)
     for row in reader:
-        #print sourceAddr + row[0] + " " + row[1]
         currentClip = SrcImage(row[0],row[1])
         currentClip.setOrigImgDim()
         #print currentClip
