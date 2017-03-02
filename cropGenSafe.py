@@ -10,6 +10,9 @@ import cv2
 # #######################################################################################   Global Vars
 sourceAddr = "/home/justin/Pictures/imgLabeling"
 topDirName = "./yolo"
+cropDim = 448
+countup = 0
+minBboxArea = 32 * 32
 
 # #######################################################################################   Classes
 # ============================================================================== Rectangle object
@@ -27,6 +30,9 @@ class Rectangle():
             self.midYDeNorm = 0
             self.widthDeNorm = 0
             self.heightDeNorm = 0
+
+            self.areaDeNorm = 0
+
         else:
             self.midXNorm = 0
             self.midYNorm = 0
@@ -37,6 +43,8 @@ class Rectangle():
             self.midYDeNorm = int(midY)
             self.widthDeNorm = int(width)
             self.heightDeNorm = int(height)
+
+            self.areaDeNorm = self.widthDeNorm * self.heightDeNorm
 
     # ------------------------------------------------------------------------- print rectangle info
     def __str__(self):
@@ -50,6 +58,7 @@ class Rectangle():
             "MidYDeNorm: "      + str(self.midYDeNorm) + "\n" \
             "WidthDeNorm: "     + str(self.widthDeNorm) + "\n" \
             "HeightDeNorm: "    + str(self.heightDeNorm) + "\n" \
+            "AreaDeNorm: "      + str(self.areaDeNorm) + "\n" \
             "==============================\n" \
     # ------------------------------------------------------------------------- normalize points of rectangle
     def normalize(self, imgRows, imgColmns):  
@@ -67,9 +76,19 @@ class Rectangle():
         self.widthDeNorm    = int(round(self.widthNorm * imgColmns))
         self.heightDeNorm   = int(round(self.heightNorm * imgRows))
 
-# ============================================================================== Image object
-class Image():
-    global sourceAddr
+        self.areaDeNorm = self.widthDeNorm * self.heightDeNorm
+
+# ============================================================================== CropImage object
+#class CropImage():
+#   global cropDim
+#   def __init__(self,topLx,topLy,botRx,botRy):
+#       self.imgWidth = 0
+#       self.imgHeight = 0
+
+
+# ============================================================================== SrcImage object
+class SrcImage():
+    global sourceAddr, cropDim, countup, minBboxArea
 # ------------------------------------------------------------------------- creates the Img object
     def __init__(self, srcClip, clusterNum):                                         
         self.srcClip = sourceAddr + "/images/" + srcClip
@@ -79,10 +98,12 @@ class Image():
         self.rectsCropped = []
         self.imgWidth = 0
         self.imgHeight = 0
+        self.imgWindow = cv2.imread(self.srcClip)
+        cv2.imwrite("Original_" + str(countup) +".png", self.imgWindow)
 
 # ------------------------------------------------------------------------- print image info
     def __str__(self):
-        return "+++++++++++++++++++++++++++++++ Image\n" + \
+        return "+++++++++++++++++++++++++++++++ SrcImage\n" + \
         "Clip path: " + self.srcClip + "\n" + \
         "Cluster number: " + str(self.clusterNum) + "\n" +  \
         "Label path: " + self.srcLabel + "\n" + \
@@ -91,9 +112,8 @@ class Image():
         + "+++++++++++++++++++++++++\n"
 
     def setOrigImgDim(self):
-        imgWindow = cv2.imread(self.srcClip)
-        self.imgWidth = imgWindow.shape[1]
-        self.imgHeight = imgWindow.shape[0]
+        self.imgWidth = self.imgWindow.shape[1]
+        self.imgHeight = self.imgWindow.shape[0]
 
     def readContent(self):                                                      
         txtFile = open(self.srcLabel,"r")
@@ -114,13 +134,49 @@ class Image():
             rectangle.denormalize(self.imgHeight, self.imgWidth)
             print rectangle
 
+    def bboxAreaLimit(self):
+        for rectangle in self.rectsFetched:
+            if(rectangle.areaDeNorm < minBboxArea):
+                return True
+        return False
+
+    def createCroppedImg(self):
+        for rectangle in self.rectsFetched:
+            #check top and bot of image
+            if ((rectangle.midYDeNorm-(cropDim/2)) < 0):
+                startYcrop = 0
+                endYcrop = cropDim
+            elif ((rectangle.midYDeNorm+(cropDim/2)) > self.imgHeight):
+                startYcrop = self.imgHeight - cropDim
+                endYcrop = self.imgHeight
+            else:
+                startYcrop = rectangle.midYDeNorm-(cropDim/2)
+                endYcrop = rectangle.midYDeNorm+(cropDim/2)
+
+            #check left and right of image
+            if ((rectangle.midXDeNorm-(cropDim/2)) < 0):
+                startXcrop = 0
+                endXcrop = cropDim
+            elif ((rectangle.midXDeNorm+(cropDim/2)) > self.imgWidth):
+                startXcrop = self.imgWidth - cropDim
+                endXcrop = self.imgWidth
+            else:
+                startXcrop = rectangle.midXDeNorm-(cropDim/2)
+                endXcrop = rectangle.midXDeNorm+(cropDim/2)
+
+            cropped = self.imgWindow[startYcrop:endYcrop, startXcrop:endXcrop]
+            cv2.imwrite("Cropped_" + str(countup) +".png", cropped)
+            #print startXcrop
+            #print startYcrop
+            #print endXcrop
+            #print endYcrop
+
+
 # #######################################################################################   MAIN CODE START
 # ---------------------------------------------------------------- take in arguments
 parser = argparse.ArgumentParser(description='')
 
 parser.add_argument('-s', type=str, default='', dest='csvSource', help='orig text file')
-#parser.add_argument('-n', type=int, default=0, dest='numClusters', help='number of clusters')
-
 parsedArgs = parser.parse_args()
 
 # ---------------------------------------------------- check csvSource
@@ -132,42 +188,29 @@ else:
 
 print "\n> Using " + addrCsvSource + " as text source"
 
-####################################
-# ---------------------------------------------------- check number of clusters
-#if (parsedArgs.numClusters == 0):
-#    numClusters = int(raw_input("==> Enter number of clusters: "))
-#else:
-#    numClusters = parsedArgs.numClusters
-#
-#print "\n> Number of clusters is " + str(numClusters)
-####################################
-
 # ---------------------------------------------------------------- create top dir and subdirs in current dir of script
 if (os.path.isdir(topDirName) is False):
     print "> " + topDirName + " doesn't exist! Creating " + topDirName
     os.makedirs(topDirName)
-####################################
-    #for numCount in range(0,numClusters):
-        #print topDirName + "/cluster" + str(numCount)
-        #print topDirName + "/cluster" + str(numCount) + "/images"
-        #print topDirName + "/cluster" + str(numCount) + "/labels"
-
-    #   os.makedirs(topDirName + "/cluster" + str(numCount))
-    #   os.makedirs(topDirName + "/cluster" + str(numCount) + "/images")
-    #   os.makedirs(topDirName + "/cluster" + str(numCount) + "/labels")
-#####################################
 
 # ----------------------------------------------------
 with open(addrCsvSource, 'rb') as f:
     reader = csv.reader(f)
     for row in reader:
         #print sourceAddr + row[0] + " " + row[1]
-        currentClip = Image(row[0],row[1])
+        currentClip = SrcImage(row[0],row[1])
         currentClip.setOrigImgDim()
-        #print currentClip
+        print currentClip
         currentClip.readContent()
         currentClip.denormalizeRectsFetched()
-        break
+        if (currentClip.bboxAreaLimit()):
+            continue
+        currentClip.createCroppedImg()
+        
+        if (countup > 1):
+            break
+        else:
+            countup += 1
 
 
 
