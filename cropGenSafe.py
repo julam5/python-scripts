@@ -8,7 +8,7 @@ import csv
 import numpy as np
 import cv2
 # #######################################################################################   Global Vars
-sourceAddr = "/home/justin/Pictures/imgLabeling"
+sourceAddr = "/home/justin/server-dataset"
 topDirName = "./roi_dataset"
 cropDim = 448
 countup = 0
@@ -246,10 +246,11 @@ with open(addrCsvSource, 'rb') as f:
             currentClip.normalizeNewBbox(index)
             currentClip.saveNewLabel(index)
 
-        if (countup > 5):
-            break
-        else:
-            countup += 1
+        #if (countup > 1000):
+        #   break
+        #else:
+        countup += 1
+        #print countup
 
 
 
