@@ -31,6 +31,11 @@ class Rectangle():
             self.widthDeNorm = 0
             self.heightDeNorm = 0
 
+            self.topLeftX = 0
+            self.topLeftY = 0
+            self.botRightX = 0
+            self.botRightY = 0
+
             self.areaDeNorm = 0
 
         else:
@@ -43,6 +48,11 @@ class Rectangle():
             self.midYDeNorm = int(midY)
             self.widthDeNorm = int(width)
             self.heightDeNorm = int(height)
+
+            self.topLeftX = self.midXDeNorm - (self.widthDeNorm/2)
+            self.topLeftY = self.midYDeNorm - (self.heightDeNorm/2)
+            self.botRightX = self.midXDeNorm + (self.widthDeNorm/2)
+            self.botRightY = self.midYDeNorm + (self.heightDeNorm/2)
 
             self.areaDeNorm = self.widthDeNorm * self.heightDeNorm
 
@@ -59,6 +69,11 @@ class Rectangle():
             "WidthDeNorm: "     + str(self.widthDeNorm) + "\n" \
             "HeightDeNorm: "    + str(self.heightDeNorm) + "\n" \
             "AreaDeNorm: "      + str(self.areaDeNorm) + "\n" \
+            "----------------------------\n" \
+            "topLeftX: "      + str(self.topLeftX) + "\n" \
+            "topLeftY: "     + str(self.topLeftY) + "\n" \
+            "botRightX: "    + str(self.botRightX) + "\n" \
+            "botRightY: "      + str(self.botRightY) + "\n" \
             "==============================\n" \
     # ------------------------------------------------------------------------- normalize points of rectangle
     def normalize(self, imgRows, imgColmns):  
@@ -76,6 +91,11 @@ class Rectangle():
         self.widthDeNorm    = int(round(self.widthNorm * imgColmns))
         self.heightDeNorm   = int(round(self.heightNorm * imgRows))
 
+        self.topLeftX = self.midXDeNorm - (self.widthDeNorm/2)
+        self.topLeftY = self.midYDeNorm - (self.heightDeNorm/2)
+        self.botRightX = self.midXDeNorm + (self.widthDeNorm/2)
+        self.botRightY = self.midYDeNorm + (self.heightDeNorm/2)
+
         self.areaDeNorm = self.widthDeNorm * self.heightDeNorm
 
 # ============================================================================== CropImage object
@@ -90,20 +110,25 @@ class SrcImage():
     global sourceAddr, cropDim, countup, minBboxArea
 # ------------------------------------------------------------------------- creates the Img object
     def __init__(self, srcClip, clusterNum):   
-        self.baseClip = os.path.basename(srcClip)                                      
+        self.baseClip = os.path.basename(srcClip)
+        self.baseLabel = self.baseClip.rstrip('.png') + ".txt"
         self.srcClip = sourceAddr + "/images/" + srcClip
         self.srcLabel = sourceAddr + "/labels/" + srcClip.rstrip('.png') + ".txt"
+
         self.dstClip = None
         self.dstLabel = None
+
         self.clusterNum = clusterNum
-        self.rectsFetched = []
-        self.clipsCropped = []
-        self.rectsCropped = []
+
         self.imgWidth = 0
         self.imgHeight = 0
         self.imgWindow = cv2.imread(self.srcClip)
         self.cropWindow = None
-        #cv2.imwrite("Original_" + str(countup) +".png", self.imgWindow)
+        self.currentCroppedClip = None
+
+        self.rectsFetched = [] # holds bboxes from label txt (Rectangles)
+        self.bboxesWithin = [] # holds bboxes found in current cropped clip (ints)
+        self.rectsCropped = [] # holds bboxes readjusted from cropped clip (Rectangles)
 
 # ------------------------------------------------------------------------- print image info
     def __str__(self):
@@ -129,14 +154,18 @@ class SrcImage():
             rectangle = Rectangle(parsed[1], parsed[2], parsed[3], parsed[4], True)
 
             self.rectsFetched.append(rectangle)
-            break # only do the first bounding box
+            #break # only do the first bounding box
 
         txtFile.close()
+
+        if (len(self.rectsFetched) > 1):
+            print self.srcClip
 
     def denormalizeRectsFetched(self):
         for rectangle in self.rectsFetched:
             rectangle.denormalize(self.imgHeight, self.imgWidth)
-            #print rectangle
+            #if (len(self.rectsFetched) > 1):
+            #   print rectangle
 
     def bboxAreaLimit(self):
         for rectangle in self.rectsFetched:
@@ -174,28 +203,41 @@ class SrcImage():
             startXcrop = rectangle.midXDeNorm-(cropDim/2)
 
         self.cropWindow = self.imgWindow[startYcrop:(startYcrop+cropDim), startXcrop:(startXcrop+cropDim)]
-        cv2.imwrite(self.dstClip + "/" + self.baseClip, self.cropWindow)
-        croppedImg = CropImage(startXcrop,startYcrop)
-        self.clipsCropped.append(croppedImg)
+        cv2.imwrite(self.dstClip + "/crop" + str(index) + "_" + self.baseClip, self.cropWindow)
+        self.currentCroppedClip = CropImage(startXcrop,startYcrop)
+        #if (len(self.rectsFetched) > 1):
+        #   print startXcrop
+        #   print startYcrop            
 
+
+    def findBboxesWithinCrop(self, index):
+        for count in range(0,len(self.rectsFetched)):
+            if ((self.rectsFetched[count].topLeftX >= self.currentCroppedClip.newOriginX) and (self.rectsFetched[count].topLeftX <= (self.currentCroppedClip.newOriginX + cropDim)) \
+            and (self.rectsFetched[count].topLeftY >= self.currentCroppedClip.newOriginY) and (self.rectsFetched[count].topLeftY <= (self.currentCroppedClip.newOriginY + cropDim))):
+                self.bboxesWithin.append(count)
+                #if (len(self.rectsFetched) > 1):
+                #   print count             
 
     def createNewBboxVals(self, index):
-        newCentXDeNorm = self.rectsFetched[index].midXDeNorm - self.clipsCropped[index].newOriginX
-        newCentYDeNorm = self.rectsFetched[index].midYDeNorm - self.clipsCropped[index].newOriginY
-        newBbox = Rectangle(newCentXDeNorm, newCentYDeNorm, self.rectsFetched[index].widthDeNorm, self.rectsFetched[index].heightDeNorm, False)
-        self.rectsCropped.append(newBbox)
+        for bboxNum in self.bboxesWithin:
+            newCentXDeNorm = self.rectsFetched[bboxNum].midXDeNorm - self.currentCroppedClip.newOriginX
+            newCentYDeNorm = self.rectsFetched[bboxNum].midYDeNorm - self.currentCroppedClip.newOriginY
+            newBbox = Rectangle(newCentXDeNorm, newCentYDeNorm, self.rectsFetched[bboxNum].widthDeNorm, self.rectsFetched[bboxNum].heightDeNorm, False)
+            self.rectsCropped.append(newBbox)
 
     def normalizeNewBbox(self, index):
-        rectangle = self.rectsCropped[index]
-        rectangle.normalize(cropDim,cropDim)
-        #print rectangle
+        for rectangle in self.rectsCropped:
+            rectangle.normalize(cropDim,cropDim)
+            #print rectangle
 
     def saveNewLabel(self,index):
-        rectangle = self.rectsCropped[index]
-        savingFile = open(self.dstLabel + "/" + self.baseClip.rstrip('.png') +".txt", "wb")
-        item = str(self.clusterNum) + " " + str(rectangle.midXNorm) + " " + str(rectangle.midYNorm) + " " + str(rectangle.widthNorm) + " " + str(rectangle.heightNorm)
-        savingFile.write("%s\n" % item)
+        savingFile = open(self.dstLabel + "/crop" + str(index) + "_" + self.baseLabel, "wb")
+        for rectangle in self.rectsCropped:
+            item = str(self.clusterNum) + " " + str(rectangle.midXNorm) + " " + str(rectangle.midYNorm) + " " + str(rectangle.widthNorm) + " " + str(rectangle.heightNorm)
+            savingFile.write("%s\n" % item)
         savingFile.close()
+        del self.bboxesWithin[:]
+        del self.rectsCropped[:]
 
 # #######################################################################################   MAIN CODE START
 # ---------------------------------------------------------------- take in arguments
@@ -230,18 +272,19 @@ with open(addrCsvSource, 'rb') as f:
         currentClip.readContent()
         currentClip.denormalizeRectsFetched()
 
-        if (currentClip.bboxAreaLimit()):
-            continue
+        #if (currentClip.bboxAreaLimit()):
+        #   continue
 
         currentClip.createClusterDir()
 
-        for index in range(len(currentClip.rectsFetched)):
+        for index in range(0,len(currentClip.rectsFetched)):
             currentClip.createCroppedImg(index)
+            currentClip.findBboxesWithinCrop(index)
             currentClip.createNewBboxVals(index)
             currentClip.normalizeNewBbox(index)
             currentClip.saveNewLabel(index)
 
-        if (countup > 2000):
+        if (countup > 100):
             break
         else:
             countup += 1
