@@ -9,7 +9,7 @@ import numpy as np
 import cv2
 # #######################################################################################   Global Vars
 sourceAddr = "/home/justin/server-dataset"
-topDirName = "./roi_dataset"
+topDirName = "./airdroneroi"
 cropDim = 448
 countup = 0
 minBboxArea = 32 * 32
@@ -90,7 +90,6 @@ class SrcImage():
     global sourceAddr, cropDim, countup, minBboxArea
 # ------------------------------------------------------------------------- creates the Img object
     def __init__(self, srcClip, clusterNum):   
-        self.dirClip = os.path.dirname(srcClip)
         self.baseClip = os.path.basename(srcClip)                                      
         self.srcClip = sourceAddr + "/images/" + srcClip
         self.srcLabel = sourceAddr + "/labels/" + srcClip.rstrip('.png') + ".txt"
@@ -146,19 +145,13 @@ class SrcImage():
         return False
 
     def createClusterDir(self):
-        clusterDirName = topDirName + "/cluster" + self.clusterNum
-        if (os.path.isdir(clusterDirName) is False):
-            print "> " + clusterDirName + " doesn't exist! Creating " + clusterDirName
-            os.makedirs(clusterDirName)
-            os.makedirs(clusterDirName + "/images")
-            os.makedirs(clusterDirName + "/labels")
+        clusterDirName = "/cluster" + self.clusterNum
+        if (os.path.isdir(topDirName + "/images" + clusterDirName) is False):
+            os.makedirs(topDirName + "/images" + clusterDirName)
+            os.makedirs(topDirName + "/labels" + clusterDirName)
 
-        if (os.path.isdir(clusterDirName + "/images" + "/" + self.dirClip) is False):
-            os.makedirs(clusterDirName + "/images" + "/" + self.dirClip)    
-            os.makedirs(clusterDirName + "/labels" + "/" + self.dirClip)
-
-        self.dstClip = clusterDirName + "/images" + "/" + self.dirClip
-        self.dstLabel = clusterDirName + "/labels" + "/" + self.dirClip
+        self.dstClip = topDirName + "/images" + clusterDirName 
+        self.dstLabel = topDirName + "/labels" + clusterDirName 
 
     def createCroppedImg(self, index):
 
@@ -224,6 +217,8 @@ print "\n> Using " + addrCsvSource + " as text source"
 if (os.path.isdir(topDirName) is False):
     print "> " + topDirName + " doesn't exist! Creating " + topDirName
     os.makedirs(topDirName)
+    os.makedirs(topDirName + "/images")
+    os.makedirs(topDirName + "/labels")
 
 # ----------------------------------------------------
 with open(addrCsvSource, 'rb') as f:
@@ -246,10 +241,10 @@ with open(addrCsvSource, 'rb') as f:
             currentClip.normalizeNewBbox(index)
             currentClip.saveNewLabel(index)
 
-        #if (countup > 1000):
-        #   break
-        #else:
-        countup += 1
+        if (countup > 2000):
+            break
+        else:
+            countup += 1
         #print countup
 
 
