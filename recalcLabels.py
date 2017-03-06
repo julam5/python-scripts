@@ -12,7 +12,9 @@ from unicodedata import decomposition, name
 from pprint import pprint as pp
 #####################################################################################################################   GLOBAL VARIABLES
 txtName = "AirdroneImgSet.txt"
-
+sourceAddr = "/home/justin/server-dataset"
+dstDir = "./redoneLabels"
+countup = 0
 #####################################################################################################################   GLOBAL FUNCTIONS
 # =============================================================================================================== Natural sorting 
 #-------------------------------------------------------------- from rosettacode
@@ -54,7 +56,7 @@ def naturalsort(items):
 # =============================================================================================================== Natural sorting 
 # =============================================================================================================== Generate clipFile.txt
 def generate_clipfile(clipDirName):
-    print "> Generating img list"
+    print "> Generating label list"
 
     tag1=".txt" #
     nameList = []
@@ -66,10 +68,13 @@ def generate_clipfile(clipDirName):
 
     return naturalsort(nameList)
 
-# #######################################################################################   Global Vars
-sourceAddr = "/home/justin/server-dataset"
-topDirName = "./airdroneroi"
-countup = 0
+def saveNatSort(clipNames):
+    savingFile = open(txtName, "wb")
+    for name in clipNames:
+        savingFile.write("%s\n" % name)
+    savingFile.close()
+
+
 # #######################################################################################   Classes
 # ============================================================================== Rectangle object
 class Rectangle():
@@ -180,11 +185,15 @@ class SrcImage():
 	def __init__(self, srcLabel):   
 		self.baseLabel = os.path.basename(srcLabel)
 		self.baseClip = self.baseLabel.rstrip('.txt') + ".png"
+
 		self.srcLabel = sourceAddr + "/labels/" + srcLabel
 		self.srcClip = sourceAddr + "/images/" + srcLabel.rstrip('.txt') + ".png"
 
-		self.dstClip = None
-		self.dstLabel = None
+		if (os.path.isdir(dstDir + "/" +os.path.dirname(srcLabel)) is False): 
+			print "> " + dstDir + "/" + os.path.dirname(srcLabel) + " is not a valid path! Creating it now."
+			os.makedirs(dstDir + "/" + os.path.dirname(srcLabel))
+
+		self.dstLabel = dstDir + "/" + srcLabel
 
 		self.clusterNum = -1
 
@@ -195,14 +204,14 @@ class SrcImage():
 		self.currentCroppedClip = None
 
 		self.rectsFetched = [] # holds bboxes from label txt (Rectangles)
-		self.rectsFixed = [] # holds bboxes readjusted for boundries within image (Rectangles)
 
 # ------------------------------------------------------------------------- print image info
 	def __str__(self):
 		return "+++++++++++++++++++++++++++++++ SrcImage\n" + \
-		"Clip path: " + self.srcClip + "\n" + \
+		"Src Clip path: " + self.srcClip + "\n" + \
+		"Src Label path: " + self.srcLabel + "\n" + \
+		"Dst Label path: " + self.dstLabel + "\n" + \
 		"Cluster number: " + str(self.clusterNum) + "\n" +	\
-		"Label path: " + self.srcLabel + "\n" + \
 		"ImgWidth: " + str(self.imgWidth) + "\n" + \
 		"ImgHeight: " + str(self.imgHeight) + "\n" \
 		+ "+++++++++++++++++++++++++\n"
@@ -217,7 +226,6 @@ class SrcImage():
 			contentN = content.rstrip('\n')
 			#parsed format = "class id", "center point x coord", " center point y coord", "width", "height" 
 			parsed = contentN.split()
-			#(self, midX=0, midY=0, width=0, height=0, initiallyNorm=True)      # creates the Img object
 			self.clusterNum = int(parsed[0])
 			rectangle = Rectangle(parsed[1], parsed[2], parsed[3], parsed[4], True)
 
@@ -230,17 +238,7 @@ class SrcImage():
 	def denormalizeRectsFetched(self):
 		for rectangle in self.rectsFetched:
 			rectangle.denormalize(self.imgHeight, self.imgWidth)
-			#	print rectangle
-
-#	def createClusterDir(self):
-#		clusterDirName = "/cluster" + self.clusterNum
-#		if (os.path.isdir(topDirName + "/images" + clusterDirName) is False):
-#			print "> " + clusterDirName + " doesn't exist! Creating " + clusterDirName
-#			os.makedirs(topDirName + "/images" + clusterDirName)
-#			os.makedirs(topDirName + "/labels" + clusterDirName)
-
-#		self.dstClip = topDirName + "/images" + clusterDirName 
-#		self.dstLabel = topDirName + "/labels" + clusterDirName 
+			#print rectangle
 
 	def bboxesNeededAdjust(self):
 		status = False
@@ -248,64 +246,67 @@ class SrcImage():
 			if (rectangle.topLeftX < 0):
 				rectangle.adjustWidthNmidX(True,self.imgWidth)
 				status = True
-			elif (rectangle.botRightX > self.imgWidth):
-				rectangle.adjustWidthNmidX(False,self.imgWidth)
-				status = True				
 
 			if (rectangle.topLeftY < 0):
 				rectangle.adjustHeightNmidY(True,self.imgHeight)
+				status = True	
+
+			if (rectangle.botRightX > self.imgWidth):
+				rectangle.adjustWidthNmidX(False,self.imgWidth)
 				status = True				
-			elif (rectangle.botRightY > self.imgHeight):
+
+			if (rectangle.botRightY > self.imgHeight):
 				rectangle.adjustHeightNmidY(False,self.imgHeight)
 				status = True				
-			#	print rectangle
 		return status		
 
 	def normalizeNewBbox(self):
-		for rectangle in self.rectsFixed:
+		for rectangle in self.rectsFetched:
 			rectangle.normalize(self.imgHeight, self.imgWidth)
 			#print rectangle
 
 	def saveNewLabel(self):
-		savingFile = open(self.dstLabel + "/crop" + str(index) + "_" + self.baseLabel, "wb")
-		for rectangle in self.rectsFixed:
+		savingFile = open(self.dstLabel, "wb")
+		for rectangle in self.rectsFetched:
 			item = str(self.clusterNum) + " " + str(rectangle.midXNorm) + " " + str(rectangle.midYNorm) + " " + str(rectangle.widthNorm) + " " + str(rectangle.heightNorm)
 			savingFile.write("%s\n" % item)
 		savingFile.close()
-		del self.rectsFixed[:]
 
 # #######################################################################################   MAIN CODE START
 # ---------------------------------------------------------------- take in arguments
 parser = argparse.ArgumentParser(description='ReCalculate Labels')
 
-parser.add_argument('-s', type=str, default=''  , dest='clipSource' , help='top parent source directory name with png images')
+parser.add_argument('-s', type=str, default=''  , dest='labelSource' , help='source dir of label files')
 
 parsedArgs = parser.parse_args()
 
-if (len(parsedArgs.clipSource) != 0 and parsedArgs.clipSource[len(parsedArgs.clipSource)-1] == '/'):
-    clipSource = parsedArgs.clipSource[0:-1]
+if (len(parsedArgs.labelSource) != 0 and parsedArgs.labelSource[len(parsedArgs.labelSource)-1] == '/'):
+    labelSource = parsedArgs.labelSource[0:-1]
 else:
-    clipSource = parsedArgs.clipSource
+    labelSource = parsedArgs.labelSource
 
 
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-if (os.path.isdir(clipSource) is False): 
-    print "> " + clipSource + " is not a valid path!"
+if (os.path.isdir(labelSource) is False): 
+    print "> " + labelSource + " is not a valid path!"
     raise SystemExit
 
-clipNames = generate_clipfile(clipSource) # format = clip#/clip#-#.png
+clipNames = generate_clipfile(labelSource) # format of each line => clip#/clip#-sub#.txt
+
+#saveNatSort(clipNames)
+
+if (os.path.isdir(dstDir) is False): 
+	print "> " + dstDir + " is not a valid path! Creating it now."
+	os.makedirs(dstDir)
 
 for clip in clipNames:
-    currentClip = SrcImage(clip)
-    currentClip.setOrigImgDim()
-    currentClip.readContent()
-    currentClip.denormalizeRectsFetched()
-
-#    currentClip.createClusterDir()
-
-	#if (countup > 2000):
-	#	break
-	#else:
-	#	countup += 1
-	#print countup
+	currentClip = SrcImage(clip) 
+	currentClip.setOrigImgDim()	
+	currentClip.readContent()
+	currentClip.denormalizeRectsFetched()
+	if (currentClip.bboxesNeededAdjust()):
+		currentClip.normalizeNewBbox()
+		currentClip.saveNewLabel()
+		#print currentClip
+		#break
