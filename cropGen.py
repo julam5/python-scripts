@@ -8,7 +8,8 @@ import cv2
 # #######################################################################################   Global Vars
 sourceAddr = "/home/justin/server-dataset"
 topDirName = "./airdroneroi"
-cropDim = 448
+cropDim = 720 #448
+resizeDim = 448
 #countup = 0
 minBboxArea = 32 * 32
 
@@ -105,7 +106,7 @@ class CropImage():
 
 # ============================================================================== SrcImage object
 class SrcImage():
-	global sourceAddr, cropDim, minBboxArea
+	global sourceAddr, cropDim, minBboxArea, resizeDim
 # ------------------------------------------------------------------------- creates the Img object
 	def __init__(self, srcClip, clusterNum):   
 		self.baseClip = os.path.basename(srcClip)
@@ -122,6 +123,7 @@ class SrcImage():
 		self.imgHeight = 0
 		self.imgWindow = cv2.imread(self.srcClip)
 		self.cropWindow = None
+		self.resizeWindow = None
 		self.currentCroppedClip = None
 
 		self.rectsFetched = [] # holds bboxes from label txt (Rectangles)
@@ -176,6 +178,7 @@ class SrcImage():
 		if (os.path.isdir(topDirName + "/images" + clusterDirName) is False):
 			print "> " + clusterDirName + " doesn't exist! Creating " + clusterDirName
 			os.makedirs(topDirName + "/images" + clusterDirName)
+		if (os.path.isdir(topDirName + "/labels" + clusterDirName) is False):
 			os.makedirs(topDirName + "/labels" + clusterDirName)
 
 		self.dstClip = topDirName + "/images" + clusterDirName 
@@ -202,7 +205,7 @@ class SrcImage():
 			startXcrop = rectangle.midXDeNorm-(cropDim/2)
 
 		self.cropWindow = self.imgWindow[startYcrop:(startYcrop+cropDim), startXcrop:(startXcrop+cropDim)]
-		cv2.imwrite(self.dstClip + "/crop" + str(index) + "_" + self.baseClip, self.cropWindow)
+		#cv2.imwrite(self.dstClip + "/crop720_" + str(index) + "_" + self.baseClip, self.cropWindow)
 		self.currentCroppedClip = CropImage(startXcrop,startYcrop)
 		#if (len(self.rectsFetched) > 1):
 		#	print startXcrop
@@ -237,6 +240,12 @@ class SrcImage():
 		savingFile.close()
 		del self.bboxesWithin[:]
 		del self.rectsCropped[:]
+
+	def resizeCrop(self):
+		r = float(resizeDim) / float (cropDim)
+		dim = (resizeDim, int (cropDim * r))
+		self.resizeWindow = cv2.resize(self.cropWindow, dim, interpolation = cv2.INTER_LINEAR)
+		cv2.imwrite(self.dstClip + "/crop" + str(index) + "_" + self.baseClip, self.resizeWindow)
 
 # #######################################################################################   MAIN CODE START
 # ---------------------------------------------------------------- take in arguments
@@ -282,8 +291,9 @@ with open(addrCsvSource, 'rb') as f:
 	        currentClip.createNewBboxVals(index)
 	        currentClip.normalizeNewBbox(index)
 	        currentClip.saveNewLabel(index)
+	        currentClip.resizeCrop()
 
-        #if (countup > 2000):
+        #if (countup > 20):
         #	break
         #else:
         #	countup += 1

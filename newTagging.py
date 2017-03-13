@@ -12,6 +12,35 @@ from itertools import groupby
 from unicodedata import decomposition, name
 from pprint import pprint as pp
 
+# =============================================================================================================== Global Vars
+imgNum = 0
+clipNames = []
+markedList = []
+
+dstDir = "."
+
+imageList = []
+refPt = []
+
+yellow = (0, 255, 255)
+green = (0, 255, 0)
+purple = (255, 0, 255)
+red = (0, 0, 255)
+
+ESC = 27
+LEFT = 81
+RIGHT = 83
+UP = 82
+DOWN = 84
+ENTER = 10
+
+drawing = False
+
+prevSess = 0
+
+imgNumPrv = -1
+currentNumRects = 0
+
 #####################################################################################################################   GLOBAL FUNCTIONS
 # =============================================================================================================== Natural sorting 
 #-------------------------------------------------------------- from rosettacode
@@ -241,14 +270,15 @@ class Image():
     # ------------------------------------------------------------------------- creates the Img object
     def __init__(self, imgName, destName):                                         
         self.imgName = imgName
-        
+        self.baseName = os.path.basename(imgName)
+
         stripped1 = (os.path.basename(imgName)).rstrip('.png')
         dashIndex = stripped1.rfind('-')
 
         subDir = os.path.dirname(imgName)
         lastSlashIndex = subDir.rfind('/')
 
-        self.txtName = destName + '/' + subDir[lastSlashIndex+1:] + '/' + stripped1 + '.txt'
+        self.txtName = destName + "/labels" +'/' + subDir[lastSlashIndex+1:] + '/' + stripped1 + '.txt'
 
 
         self.leafDirPath = os.path.dirname(self.txtName)
@@ -276,7 +306,7 @@ class Image():
             #parsed format = "class id", "center point x coord", " center point y coord", "width", "height" 
             parsed = contentN.split()
             #(topL=None, botR=None, midX=None, midY=None, width=None, height=None, color=None):      # creates the Img object
-            rectangle = Rectangle(None, None, parsed[1], parsed[2], parsed[3], parsed[4], red)
+            rectangle = Rectangle(None, None, parsed[1], parsed[2], parsed[3], parsed[4], green)
 
             self.rectsNorm.append(rectangle)
         
@@ -392,32 +422,7 @@ class Image():
 # ##############################################################################################################################################################################
 # ##############################################################################################################################################################################
 # #####################################################################################################################   MAIN CODE START
-# =============================================================================================================== Global Vars
-imgNum = 0
-clipNames = []
-markedList = []
 
-imageList = []
-refPt = []
-
-yellow = (0, 255, 255)
-green = (0, 255, 0)
-purple = (255, 0, 255)
-red = (0, 0, 255)
-
-ESC = 27
-LEFT = 81
-RIGHT = 83
-UP = 82
-DOWN = 84
-ENTER = 10
-
-drawing = False
-
-prevSess = 0
-
-imgNumPrv = -1
-currentNumRects = 0
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # --------------------------------------------------------------------------------------------------------------- Check for config file (checked)
@@ -431,247 +436,59 @@ if (len(parsedArgs.clipSource) != 0 and parsedArgs.clipSource[len(parsedArgs.cli
     clipSource = parsedArgs.clipSource[0:-1]
 else:
     clipSource = parsedArgs.clipSource
+
+if (clipSource == ''):    
+    clipSource = raw_input("> Enter clip directory's path (use . and .. if necessary): ")
+
+
+# ---------------------------------------------------------------------------------------------------------- check if image directory exists (checked)
+if (os.path.isdir(clipSource) is False): 
+    print "> " + clipSource + " is not a valid path!"
+    raise SystemExit
+
+# example :: clipSource = "./images/clip#_****"
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # --------------------------------------------------------------------------------------------------------------- Check for config file (checked)
+configFileName = os.path.basename(clipSource) + ".ini"
+
 config = ConfigParser.ConfigParser()
 
-if (os.path.isfile('currentConfig.ini')):
-    print "> Found previous config file."
-    config.read('currentConfig.ini')
+if (os.path.isfile(configFileName)):
+    print "> Found " + configFileName
+    config.read(configFileName)
+
+    #set variables from config file
     lastDir = config.get('Last_Session', 'last_folder')
-    print "> Previous session: " + lastDir
-
-    if (clipSource != ''):
-        prevSess =  (clipSource == lastDir)             #int(raw_input("Restore prev session? (0=no,1=yes): "))
-    else:
-        prevSess = int(raw_input("==> Restore prev session? (0=no,1=yes): "))
-
-    if not prevSess:
-        print "> Not using prev configuration"
-        prevFolder = config.get('Last_Session', 'last_folder')
-        prevPos = config.getint('Last_Session', 'last_pos')
-        prevClips = ast.literal_eval(config.get("Last_Session", "clip_list"))
-        prevMarked = ast.literal_eval(config.get("Last_Session", "skip_list"))
-
-        config = ConfigParser.RawConfigParser()
-
-        config.add_section('Last_Session')
-        config.set('Last_Session', 'last_folder', prevFolder)
-        config.set('Last_Session', 'last_pos', prevPos)
-        config.set('Last_Session', 'clip_list', prevClips)
-        config.set('Last_Session', 'skip_list', prevMarked)
-
-        with open( os.path.basename(config.get('Last_Session', 'last_folder')) +'.ini', 'wb') as configfile:
-            config.write(configfile)
-
+    imgNum = config.getint('Last_Session', 'last_pos')
+    markedList = ast.literal_eval(config.get("Last_Session", "skip_list"))
+    
 else:
     print "Did not find config file. Creating one at program's exit."
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# --------------------------------------------------------------------------------------------------------------- if config file will be used (checked)
-if prevSess:
-    imgNum = config.getint('Last_Session', 'last_pos')
-    clipNames = ast.literal_eval(config.get("Last_Session", "clip_list"))
-    markedList = ast.literal_eval(config.get("Last_Session", "skip_list"))
 
-# --------------------------------------------------------------------------------------------------------------- if config file will NOT be used (checked)
-else:
-    if (clipSource == ''):    
-        clipSource = raw_input("> Enter clip directory's path (use . and .. if necessary): ")
+clipNames = generate_clipfile(clipSource)
 
-    # ---------------------------------------------------------------------------------------------------------- check if image directory exists (checked)
-    if (os.path.isdir(clipSource) is False): 
-        print "> " + clipSource + " is not a valid path!"
-        raise SystemExit
-    
-    clipNames = generate_clipfile(clipSource)
-
-    # --------------------------------------------------------------------------------------------------------- if clipNames is empty, exit (checked)
-    if not clipNames:
-        print "> Clip list is empty!"
-        raise SystemExit
-
+# --------------------------------------------------------------------------------------------------------- if clipNames is empty, exit (checked)
+if not clipNames:
+    print "> Clip list is empty!"
+    raise SystemExit
+#else:
+#    print clipNames
 # --------------------------------------------------------------------------------------------------------------- create image array
 for image in clipNames:
-    pic = Image(image,'./labels')
+    pic = Image(image,dstDir)
     if (markedList) and (image in markedList):
         pic.marked = True
+    print pic
     #imageList.append(pic)
-    if os.path.isfile(pic.txtName) and os.stat(pic.txtName).st_size != 0: # enable only if checking labels
-	   imageList.append(pic)
+    #if os.path.isfile(pic.txtName) and os.stat(pic.txtName).st_size != 0: # enable only if checking labels
+	#   imageList.append(pic)
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # --------------------------------------------------------------------------------------------------------------- Enable autosave?
-autosave = int(raw_input("==> Enable autosave? (0=no,1=yes): "))
-print "> Autosave: " + str(bool(autosave))
+#autosave = int(raw_input("==> Enable autosave? (0=no,1=yes): "))
+#print "> Autosave: " + str(bool(autosave))
 
-
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# --------------------------------------------------------------------------------------------------------------- Finding exisiting labels (checked)
-for image in imageList:
- 
-    if (os.path.isdir(image.leafDirPath) is False):
-        print "> " + image.leafDirPath + " doesn't exist in current directory! Creating " + image.leafDirPath + " directory"
-        os.makedirs(image.leafDirPath)
-
-    else:
-        if os.path.isfile(image.txtName) and os.stat(image.txtName).st_size != 0:
-            image.readContent()
-
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# --------------------------------------------------------------------------------------------------------------- Running image editor
-imgLim = len(imageList)
-
-
-cv2.namedWindow('ImgWindow', cv2.WINDOW_NORMAL)
-cv2.setMouseCallback('ImgWindow', draw_n_add)
-
-# --------------------------------------------------------------------------------------------------------------- Infinite loop till Esc exit
-print "> Entered viewer"
-print_help()
-
-while True:
-
-    # ------------------------------------------------------------------------- print info only if moved to new image (checked)
-    if imgNum != imgNumPrv:
-        imgWindow = cv2.imread(imageList[imgNum].imgName)
-        print "\n=======> CURRENT IMAGE [ " + os.path.basename(imageList[imgNum].imgName) + " ]"
-        print imageList[imgNum]
-
-    # ------------------------------------------------------------------------- denormalize any rectangles left in img's label file
-    if imageList[imgNum].rectsNorm:
-        imageList[imgNum].addRectsNorm(imgWindow.shape[0], imgWindow.shape[1])
-
-    # ------------------------------------------------------------------------- draw rectangles and show imgWindow matrix (picture)
-    currentNumRects = len(imageList[imgNum].rectsSaved)
-    if not imageList[imgNum].marked:
-        imageList[imgNum].drawRects()    
-    if imageList[imgNum].marked:
-        imageList[imgNum].drawSkipped()  
-    cv2.imshow('ImgWindow',imgWindow)
-    
-    # ------------------------------------------------------------------------- polls here for refresh img or a keypress
-    key = cv2.waitKey(30) & 0xFF
-    #print key
-
-    # ------------------------------------------------------------------------- add rectangles from refPt list into img's rectangles list
-    imgNumPrv = imgNum
-    if len(refPt) > 1:
-        imageList[imgNum].addRects(imgWindow.shape[0], imgWindow.shape[1]) 
-        del refPt[:]  
-
-    # ------------------------------------------------------------------------- keypress options
-    # ------------------------------------------------ if Esc key is pressed
-    if key == ESC:
-        if bool(autosave):
-            if (not imageList[imgNum].marked):
-                imageList[imgNum].saveProg()
-            print "> Bye!\n"
-            break
-
-        else:
-            print '==> Do you really wish to quit? (press Esc for Yes)'
-            key = cv2.waitKey(0) & 0xFF
-            if key == 27:
-                print "> Bye!\n"
-                break
-        print "> Cancelled quitting"
-
-    # ------------------------------------------------ if left arrow key is pressed
-    elif key == LEFT: 
-        if bool(autosave and not imageList[imgNum].marked):
-            imageList[imgNum].saveProg()
-
-        if imgNum == 0:
-            imgNum = imgLim - 1
-        else:
-            imgNum -= 1
-
-    # ------------------------------------------------ if right arrow key is pressed
-    elif key == RIGHT:
-        if bool(autosave and not imageList[imgNum].marked):
-            imageList[imgNum].saveProg()
-
-        if imgNum == imgLim - 1:
-            imgNum = 0
-        else:
-            imgNum += 1
-
-    # ------------------------------------------------ to delete a rectangle
-    elif key == ord("d"):
-        imageList[imgNum].drawNums()
-        cv2.imshow('ImgWindow',imgWindow)
-        if (imageList[imgNum].rectsSaved):
-            imageList[imgNum].removeRect()
-            imgWindow = cv2.imread(imageList[imgNum].imgName)
-
-    # ------------------------------------------------ to recover a rectangle
-    elif key == ord("r"):
-        if (imageList[imgNum].rectsDel and not imageList[imgNum].marked):
-            imageList[imgNum].reAddRect()
-
-    # ------------------------------------------------ to save all current rectangles
-    elif key == ord("s"):
-        if not imageList[imgNum].marked:
-            imageList[imgNum].saveProg()
-
-    # ------------------------------------------------ shift mode
-    elif key == 226 or key == 225:
-        print "> Shift key pressed, waiting for next key. (Valid keys: Left, Right, Esc)"
-        key = cv2.waitKey(0) & 0xFF
-
-        if key == LEFT: #print "Shift + Left"
-
-            if imgNum == 0:
-                imgNum = imgLim - 1
-            else:
-              imgNum -= 1
-
-        elif key == RIGHT: #print "Shift + Right"
-
-            if imgNum == imgLim - 1:
-                imgNum = 0
-            else:
-                imgNum += 1
-
-        elif key == ESC: # Shift Exit
-            print "> Bye!\n"
-            break
-
-        else:
-            print "> No valid keypress combination with shift, leaving shift key wait"
-
-    # ------------------------------------------------ print help
-    elif key == ord("h"):
-        print_help()     
-
-    # ------------------------------------------------ print help
-    elif key == ord("m"):
-        if imageList[imgNum].marked:
-            imageList[imgNum].unmarkImg()
-            print "> Unmarking image"
-            imgWindow = cv2.imread(imageList[imgNum].imgName)
-        else:
-            imageList[imgNum].markImg()
-            print "> Marking image"
-            imgWindow = cv2.imread(imageList[imgNum].imgName)
-
-cv2.destroyAllWindows()
-
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-config = ConfigParser.RawConfigParser()
-
-config.add_section('Last_Session')
-config.set('Last_Session', 'last_folder', os.path.dirname(clipNames[0]))
-config.set('Last_Session', 'last_pos', imgNum)
-config.set('Last_Session', 'clip_list', clipNames)
-
-del markedList[:]
-for image in imageList:
-    if image.marked:
-        markedList.append(image.imgName)
-config.set('Last_Session', 'skip_list', markedList)
-
-with open('currentConfig.ini', 'wb') as configfile:
-    config.write(configfile)
 
