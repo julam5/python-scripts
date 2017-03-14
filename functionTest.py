@@ -90,6 +90,22 @@ def listOfTags(dirName,dotTag):
 
     return naturalsort(nameList)
 
+class ImageProperties():
+	global sourceAddr, cropDim, minBboxArea, resizeDim
+	# ------------------------------------------------------------------------- creates the Img object
+	def __init__(self, srcName, clusterNum):   
+		self.srcClip = srcName[0:len(srcName)-4] + ".png"
+		self.srcLabel = srcName[0:len(srcName)-4] + ".txt"
+
+
+
+	# ------------------------------------------------------------------------- print image info
+	def __str__(self):
+		return "+++++++++++++++++++++++++++++++ SrcImage\n" + \
+		"Clip path: " + self.srcClip + "\n" + \
+		"Label path: " + self.srcLabel + "\n" + \
+		"+++++++++++++++++++++++++\n"
+
 ################################################################### MAIN CODE
 
 srcClipDir, srcLabelDir = getArguments()
@@ -100,5 +116,5 @@ labelList = []
 clipList = listOfTags(srcClipDir,".png")
 labelList = listOfTags(srcLabelDir, ".txt")
 
-print clipList
-print labelList
+picture = ImageProperties(clipList[1],-1)
+print picture

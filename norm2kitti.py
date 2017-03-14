@@ -225,7 +225,7 @@ class SrcLabel():
 		savingFile = open(self.dstLabel, "wb")
 		for rectangle in self.rectsFetched:
 			# type, truncated, occluded, alpha, (4) bbox, (3) dimensions, (3) location, rotation_y, score
-			item = ("Drone " + "0.00 " + "0 " + "0.00 " + '{}.00' + " " + '{}.00' + " " + '{}.00' + " " + '{}.00' + " " + "-1 -1 -1 -1000 -1000 -1000 -10") \
+			item = ("Drone -1 -1 -10 " + '{}.00' + " " + '{}.00' + " " + '{}.00' + " " + '{}.00' + " " + "-1 -1 -1 -1000 -1000 -1000 -10") \
 			.format(rectangle.topLeftX,rectangle.topLeftY,rectangle.botRightX,rectangle.botRightY)
 			savingFile.write("%s\n" % item)
 		savingFile.close()

@@ -48,57 +48,76 @@ def naturalsort(items):
 
 # ---------------------------------------------------------------- parse arguments passed
 def getArguments():
-	parser = argparse.ArgumentParser(description='')
+    parser = argparse.ArgumentParser(description='')
 
-	parser.add_argument('-c', type=str, default='', dest='srcClipDir', help='source clip dir path')
-	parser.add_argument('-l', type=str, default='', dest='srcLabelDir', help='source label dir path')
+    parser.add_argument('-c', type=str, default='', dest='srcClipDir', help='source clip dir path')
+    parser.add_argument('-l', type=str, default='', dest='srcLabelDir', help='source label dir path')
 
-	parsedArgs = parser.parse_args()
+    parsedArgs = parser.parse_args()
 
-	if (len(parsedArgs.srcClipDir) != 0 and parsedArgs.srcClipDir[len(parsedArgs.srcClipDir)-1] == '/'):
-	    srcClipDir = parsedArgs.srcClipDir[0:-1]
-	else:
-	    srcClipDir = parsedArgs.srcClipDir
+    if (len(parsedArgs.srcClipDir) != 0 and parsedArgs.srcClipDir[len(parsedArgs.srcClipDir)-1] == '/'):
+        srcClipDir = parsedArgs.srcClipDir[0:-1]
+    else:
+        srcClipDir = parsedArgs.srcClipDir
 
-	if (srcClipDir == ''):    
-		srcClipDir = raw_input("> Enter source clip folder path (use . and .. if necessary): ")
+    if (srcClipDir == ''):    
+        srcClipDir = raw_input("> Enter source clip folder path (use . and .. if necessary): ")
 
-	srcClipDir = os.path.expanduser(srcClipDir)
+    srcClipDir = os.path.expanduser(srcClipDir)
 
-	if (len(parsedArgs.srcLabelDir) != 0 and parsedArgs.srcLabelDir[len(parsedArgs.srcLabelDir)-1] == '/'):
-	    srcLabelDir = parsedArgs.srcLabelDir[0:-1]
-	else:
-	    srcLabelDir = parsedArgs.srcLabelDir
+    if (len(parsedArgs.srcLabelDir) != 0 and parsedArgs.srcLabelDir[len(parsedArgs.srcLabelDir)-1] == '/'):
+        srcLabelDir = parsedArgs.srcLabelDir[0:-1]
+    else:
+        srcLabelDir = parsedArgs.srcLabelDir
 
-	if (srcLabelDir == ''):    
-		srcLabelDir = raw_input("> Enter source label folder path (use . and .. if necessary): ")
+    #if (srcLabelDir == ''):    
+    #    srcLabelDir = raw_input("> Enter source label folder path (use . and .. if necessary): ")
 
-	srcLabelDir = os.path.expanduser(srcLabelDir)
+    #srcLabelDir = os.path.expanduser(srcLabelDir)
 
-	return srcClipDir, srcLabelDir
+    return srcClipDir, srcLabelDir
 
 # ---------------------------------------------------------------- generated files
-def listOfTags(dirName,dotTag):
-    print "> Generating list for " + dotTag + " tags" 
+def listOfTags(dirName):
+    print "> Generating list of tags" 
     
     nameList = []
 
     for root, dirs, files in os.walk(dirName):
         for name in files:
-            if (name.rfind(dotTag) != -1 ):
+            if (name[-4:] != ".jpg" and name[-4:] != ".png" and name[-4:] != ".JPG" and name[-5:] != ".jpeg" and name[-3:] != ".py" and name[-4:] != ".txt"):
                 nameList.append(os.path.join(root, name))          
 
     return naturalsort(nameList)
 
+def saveList(clipNames):
+    savingFile = open("addrsOfTags.txt", "wb")
+    for name in clipNames:
+        savingFile.write("%s\n" % name)
+    savingFile.close()
 ################################################################### MAIN CODE
 
 srcClipDir, srcLabelDir = getArguments()
 
 clipList = []
-labelList = []
 
-clipList = listOfTags(srcClipDir,".png")
-labelList = listOfTags(srcLabelDir, ".txt")
+clipList = listOfTags(srcClipDir)
+#saveList(clipList)
+for clip in clipList:
+    #print "rm " + clip
+    subprocess.call("rm " + clip, shell=True)
 
-print clipList
-print labelList
+
+
+
+
+
+
+
+
+
+
+
+
+
+
