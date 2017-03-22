@@ -6,13 +6,56 @@ import csv
 import numpy as np
 import cv2
 # #######################################################################################   Global Vars
-sourceAddr = "/home/justin/server-dataset"
-topDirName = "./airdroneroi"
-cropDim = 720 #448
+#sourceAddr = "/home/justin/server-dataset/annotate"
+dstTopDirName = "./airdroneroi"
+cropDim = 448 #448
 resizeDim = 448
 #countup = 0
 minBboxArea = 32 * 32
+# #######################################################################################   Functions
+# ---------------------------------------------------------------- check if path is directory, if not exit program
+def ifNotDirExit(directoryName):
+    if (os.path.isdir(directoryName) is False): 
+        print "> " + directoryName + " is not a valid directory! Exiting."
+        raise SystemExit
+    else:
+        print "> Found directory: " + directoryName 
+# ---------------------------------------------------------------- check if path is directory, if not exit program
+def ifNotDirCreate(directoryName):
+    if (os.path.isdir(directoryName) is False): 
+        print "> " + directoryName + " is not a valid directory! Creating it."
+        os.makedirs(directoryName)
+    #else:
+    #    print "> Found directory: " + directoryName 
+# ---------------------------------------------------------------- parse arguments passed
+def readArguments():
+    parser = argparse.ArgumentParser(description='')
 
+    parser.add_argument('-s', type=str, default=None, dest='csvFile', help='path to .csv file')
+    parser.add_argument('-t', type=str, default=None, dest='srcTop', help='source top dir path containing /images and corresponding /labels')
+
+    parsedArgs = parser.parse_args()
+
+    if (parsedArgs.csvFile == None):    
+        print "> No csv file path entered!"
+        raise SystemExit
+
+    csvFile = os.path.expanduser(parsedArgs.csvFile)
+
+    if (parsedArgs.srcTop == None):    
+        print "> No source top directory path containing /images and /labels entered!"
+        raise SystemExit
+
+    if (parsedArgs.srcTop[-1] == '/'):
+        srcTop = parsedArgs.srcTop[0:-1]
+    else:
+        srcTop = parsedArgs.srcTop
+
+    srcTop = os.path.expanduser(srcTop)
+    print "> Verifying source clip directory"
+    ifNotDirExit(srcTop)
+
+    return csvFile, srcTop
 # #######################################################################################   Classes
 # ============================================================================== Rectangle object
 class Rectangle():
@@ -106,10 +149,11 @@ class CropImage():
 
 # ============================================================================== SrcImage object
 class SrcImage():
-	global sourceAddr, cropDim, minBboxArea, resizeDim
+	global cropDim, minBboxArea, resizeDim
 # ------------------------------------------------------------------------- creates the Img object
-	def __init__(self, srcClip, clusterNum):   
+	def __init__(self, srcClip, clusterNum, sourceAddr):   
 		self.baseClip = os.path.basename(srcClip)
+		self.baseDir = os.path.dirname(srcClip)
 		self.baseLabel = self.baseClip.rstrip('.png') + ".txt"
 		self.srcClip = sourceAddr + "/images/" + srcClip
 		self.srcLabel = sourceAddr + "/labels/" + srcClip.rstrip('.png') + ".txt"
@@ -175,14 +219,11 @@ class SrcImage():
 
 	def createClusterDir(self):
 		clusterDirName = "/cluster" + self.clusterNum
-		if (os.path.isdir(topDirName + "/images" + clusterDirName) is False):
-			print "> " + clusterDirName + " doesn't exist! Creating " + clusterDirName
-			os.makedirs(topDirName + "/images" + clusterDirName)
-		if (os.path.isdir(topDirName + "/labels" + clusterDirName) is False):
-			os.makedirs(topDirName + "/labels" + clusterDirName)
+		ifNotDirCreate(dstTopDirName + "/images" + clusterDirName)
+		ifNotDirCreate(dstTopDirName + "/labels" + clusterDirName)
 
-		self.dstClip = topDirName + "/images" + clusterDirName 
-		self.dstLabel = topDirName + "/labels" + clusterDirName 
+		self.dstClip = dstTopDirName + "/images" + clusterDirName 
+		self.dstLabel = dstTopDirName + "/labels" + clusterDirName 
 
 	def createCroppedImg(self, index):
 
@@ -233,7 +274,7 @@ class SrcImage():
 			#print rectangle
 
 	def saveNewLabel(self,index):
-		savingFile = open(self.dstLabel + "/crop" + str(index) + "_" + self.baseLabel, "wb")
+		savingFile = open(self.dstLabel + "/" + self.baseDir +  "_" + self.baseLabel[:-4] + "_crop" + str(index) + ".txt", "wb")
 		for rectangle in self.rectsCropped:
 			item = str(self.clusterNum) + " " + str(rectangle.midXNorm) + " " + str(rectangle.midYNorm) + " " + str(rectangle.widthNorm) + " " + str(rectangle.heightNorm)
 			savingFile.write("%s\n" % item)
@@ -245,37 +286,21 @@ class SrcImage():
 		r = float(resizeDim) / float (cropDim)
 		dim = (resizeDim, int (cropDim * r))
 		self.resizeWindow = cv2.resize(self.cropWindow, dim, interpolation = cv2.INTER_LINEAR)
-		cv2.imwrite(self.dstClip + "/crop" + str(index) + "_" + self.baseClip, self.resizeWindow)
+		cv2.imwrite(self.dstClip + "/" + self.baseDir +  "_" + self.baseClip[:-4] + "_crop" + str(index) + ".png", self.resizeWindow)
 
 # #######################################################################################   MAIN CODE START
-# ---------------------------------------------------------------- take in arguments
-parser = argparse.ArgumentParser(description='')
-
-parser.add_argument('-s', type=str, default='', dest='csvSource', help='orig text file')
-parsedArgs = parser.parse_args()
-
-# ---------------------------------------------------- check csvSource
-if (len(parsedArgs.csvSource) == 0 or not os.path.isfile(parsedArgs.csvSource)):
-    print "> csv source is invalid!"
-    raise SystemExit
-else:
-    addrCsvSource = parsedArgs.csvSource
-
-print "\n> Using " + addrCsvSource + " as text source"
+addrCsvSource, sourceAddr = readArguments()
 
 # ---------------------------------------------------------------- create top dir and subdirs in current dir of script
-if (os.path.isdir(topDirName) is False):
-	print "> " + topDirName + " doesn't exist! Creating " + topDirName
-	os.makedirs(topDirName)
-	os.makedirs(topDirName + "/images")
-	os.makedirs(topDirName + "/labels")
+ifNotDirCreate(dstTopDirName)
+ifNotDirCreate(dstTopDirName + "/images")
+ifNotDirCreate(dstTopDirName + "/labels")
 
 # ----------------------------------------------------
 with open(addrCsvSource, 'rb') as f:
     reader = csv.reader(f)
     for row in reader:
-
-        currentClip = SrcImage(row[0],row[1])
+        currentClip = SrcImage(row[0],row[1], sourceAddr)
         currentClip.setOrigImgDim()
         currentClip.readContent()
         currentClip.denormalizeRectsFetched()

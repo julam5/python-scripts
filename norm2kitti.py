@@ -74,7 +74,41 @@ def saveNatSort(clipNames):
         savingFile.write("%s\n" % name)
     savingFile.close()
 
+def readArguments():
+    parser = argparse.ArgumentParser(description='')
 
+    parser.add_argument('-s', type=str, default=None, dest='srcTop', help='source label dir path')
+
+    parsedArgs = parser.parse_args()
+
+    if (parsedArgs.srcTop == None):    
+        print "> No labels directory path entered!"
+        raise SystemExit
+
+    if (parsedArgs.srcTop[-1] == '/'):
+        srcTop = parsedArgs.srcTop[0:-1]
+    else:
+        srcTop = parsedArgs.srcTop
+
+    srcTop = os.path.expanduser(srcTop)
+    print "> Verifying source clip directory"
+    ifNotDirExit(srcTop)
+
+    return srcTop
+# ---------------------------------------------------------------- check if path is directory, if not exit program
+def ifNotDirExit(directoryName):
+    if (os.path.isdir(directoryName) is False): 
+        print "> " + directoryName + " is not a valid directory! Exiting."
+        raise SystemExit
+    else:
+        print "> Found directory: " + directoryName 
+# ---------------------------------------------------------------- check if path is directory, if not exit program
+def ifNotDirCreate(directoryName):
+    if (os.path.isdir(directoryName) is False): 
+        print "> " + directoryName + " is not a valid directory! Creating it."
+        os.makedirs(directoryName)
+    #else:
+        #print "> Found directory: " + directoryName 
 # #######################################################################################   Classes
 # ============================================================================== Rectangle object
 class Rectangle():
@@ -231,32 +265,14 @@ class SrcLabel():
 		savingFile.close()
 
 # #######################################################################################   MAIN CODE START
-# ---------------------------------------------------------------- take in arguments
-parser = argparse.ArgumentParser(description='ReCalculate Labels')
 
-parser.add_argument('-s', type=str, default=''  , dest='labelSource' , help='source dir of label files')
+topDirPath = readArguments()
 
-parsedArgs = parser.parse_args()
-
-if (len(parsedArgs.labelSource) != 0 and parsedArgs.labelSource[len(parsedArgs.labelSource)-1] == '/'):
-    labelSource = parsedArgs.labelSource[0:-1]
-else:
-    labelSource = parsedArgs.labelSource
-
-
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-if (os.path.isdir(labelSource) is False): 
-    print "> " + labelSource + " is not a valid path!"
-    raise SystemExit
-
-clipNames = generate_clipfile(labelSource) # format of each line => clip#/clip#-sub#.txt
+clipNames = generate_clipfile(topDirPath) # format of each line => clip#/clip#-sub#.txt
 
 #saveNatSort(clipNames)
 
-if (os.path.isdir(dstDir) is False): 
-	print "> " + dstDir + " is not a valid path! Creating it now."
-	os.makedirs(dstDir)
+ifNotDirCreate(dstDir)
 
 for clip in clipNames:
 	currentClip = SrcLabel(clip) 

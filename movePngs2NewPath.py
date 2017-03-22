@@ -91,7 +91,7 @@ def findFiles(directoryName,dotTag):
 
     for root, dirs, files in os.walk(directoryName):
         for name in files:
-            if (name.rfind(dotTag) != -1):
+            if (name.rfind(dotTag) != -1 and (os.path.join(root, name)).rfind("/images/clip") != -1):
                 nameList.append(os.path.join(root, name))
 
     if not nameList:
@@ -107,21 +107,50 @@ def saveListInTxt(givenList):
         savingFile.write("%s\n" % name)
     savingFile.close()
 
+def findDstPath(srcName):
+    clusterNum = 0
+    while(srcName.rfind("/cluster" + str(clusterNum) + "/") == -1):
+        clusterNum += 1
+    ifNotDirCreate("./images/cluster" + str(clusterNum))
+    return "./images/cluster" + str(clusterNum)
+
+def readContent(txtPath):                                                      
+    txtFile = open(txtPath,"r")
+    contentList = []
+    for content in iter(txtFile):
+        #print content
+        content1 = content.replace('\'','')
+        content2 = content1.replace('[','')
+        content3 = content2.replace(']','')
+        contentF = content3.replace(',','')
+        #print contentF
+        contentList.append(contentF)
+
+
+    txtFile.close()
+    return contentList
+
+def saveFixLabel(dstPath,contentList):
+    savingFile = open(dstPath, "wb")
+    for content in contentList:
+        savingFile.write("%s" % content)
+    savingFile.close()
+
 ####################################################################################################### GLOBAL VARS
-fileList = []
+problemList = []
 readContentList = []
 
 ####################################################################################################### MAIN CODE
 ####################################################################################################### MAIN CODE
 srcTopDir = getArguments()
 
-fileList = findFiles(srcTopDir, ".png")
+problemList = findFiles(srcTopDir, ".png")
 
-saveListInTxt(fileList)
+saveListInTxt(problemList)
 #ifNotDirCreate("./labels")
-#for item in problemList:
+for item in problemList:
     #print item
-#    dstPath = findDstPath(item)
+    dstPath = findDstPath(item)
     #print "mv " + item + " " + dstPath
-#    subprocess.call("mv " + item + " " + dstPath, shell=True)
+    subprocess.call("mv " + item + " " + dstPath, shell=True)
     #break

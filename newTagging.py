@@ -11,7 +11,8 @@ import copy
 from itertools import groupby
 from unicodedata import decomposition, name
 from pprint import pprint as pp
-# =============================================================================================================== GLOBAL VARS
+
+####################################################################################################### GLOBAL VARS
 index_imageList = 0
 autosave = False
 
@@ -20,9 +21,21 @@ skipClipList = []
 imageList = []
 
 
+yellow = (0, 255, 255)
+green = (0, 255, 0)
+purple = (255, 0, 255)
+red = (0, 0, 255)
 
-# =============================================================================================================== Natural sorting 
-#-------------------------------------------------------------- from rosettacode
+ESC = 27
+LEFT = 81
+RIGHT = 83
+UP = 82
+DOWN = 84
+ENTER = 10
+
+drawing = False
+####################################################################################################### FUNCTIONS
+# ====================================================================================================== Natural sorting from rosettacode
 commonleaders = ['the'] # lowercase leading words to ignore
  
 hexdigits = set('0123456789abcdef')
@@ -59,11 +72,19 @@ def sortkeygen(s):
 def naturalsort(items):
     return sorted(items, key=sortkeygen)
 
-# ---------------------------------------------------------------- check if path is directory
+# ---------------------------------------------------------------- check if path is directory, if not exit program
 def ifNotDirExit(directoryName):
     if (os.path.isdir(directoryName) is False): 
-        print "> " + directoryName + " is not a valid directory!"
+        print "> " + directoryName + " is not a valid directory! Exiting."
         raise SystemExit
+    else:
+        print "> Found directory: " + directoryName 
+
+# ---------------------------------------------------------------- check if path is directory, if not exit program
+def ifNotDirCreate(directoryName):
+    if (os.path.isdir(directoryName) is False): 
+        print "> " + directoryName + " is not a valid directory! Creating it."
+        os.makedirs(directoryName)
     else:
         print "> Found directory: " + directoryName 
 
@@ -71,78 +92,171 @@ def ifNotDirExit(directoryName):
 def getArguments():
     parser = argparse.ArgumentParser(description='')
 
-    parser.add_argument('-s', type=str, default='', dest='srcClipDir', help='source clip dir path')
+    parser.add_argument('-s', type=str, default=None, dest='srcClipDir', help='source clip dir path')
 
     parsedArgs = parser.parse_args()
 
-    if (len(parsedArgs.srcClipDir) != 0 and parsedArgs.srcClipDir[-1] == '/'):
+    if (parsedArgs.srcClipDir == None):    
+        print "> No /images directory path entered!"
+        raise SystemExit
+
+    if (parsedArgs.srcClipDir[-1] == '/'):
         srcClipDir = parsedArgs.srcClipDir[0:-1]
     else:
         srcClipDir = parsedArgs.srcClipDir
 
-    if (srcClipDir == ''):    
-        srcClipDir = raw_input("> Enter source clip folder path (use . and .. if necessary): ")
-
     srcClipDir = os.path.expanduser(srcClipDir)
+    print "> Verifying source clip directory"
     ifNotDirExit(srcClipDir)
 
     srcLabelDir = srcClipDir.replace("images", "labels")
-    ifNotDirExit(srcLabelDir) 
+    print "> Verifying source label directory"
+    ifNotDirCreate(srcLabelDir) 
 
     return srcClipDir, srcLabelDir
 
 # ---------------------------------------------------------------- generated list files
-def listOfTags(dirName,dotTag):
+def listOfTags(directoryName,dotTag):
     print "> Generating list for " + dotTag + " tags" 
     
     nameList = []
 
-    for root, dirs, files in os.walk(dirName):
+    for root, dirs, files in os.walk(directoryName):
         for name in files:
             if (name.rfind(dotTag) != -1 ):
-                nameList.append(os.path.join(root, name))          
+                nameList.append(os.path.join(root, name))
+
+    if not nameList:
+        print "> List of tags is empty!"
+        raise SystemExit
 
     return naturalsort(nameList)
 
+# ---------------------------------------------------------------- find and read configuration file
 def configReader(baseClipDir):
     config = ConfigParser.ConfigParser()
-    configFileName = baseClipDir+".ini"
+    configFileName = baseClipDir + ".ini"
 
     if (os.path.isfile(configFileName)):
-        print "> Found " + configFileName
+        print "> Found: " + configFileName
         config.read(configFileName)
         lastIndex = config.getint('Last_Session', 'last_pos')
-
         markedList = ast.literal_eval(config.get("Last_Session", "skip_list"))
 
     else:
-        print "> Did not find " + configFileName + "; Creating one at program's exit."
+        print "> Not Found: " + configFileName + " => Creating one at program's exit."
+        lastIndex = 0
+        markedList = []
 
     return lastIndex, markedList
 
+####################################################################################################### CLASSES
+# =============================================================================================================== Rectangle object
+class Rectangle():
+    def __init__(self, topL=None, botR=None, midX=None, midY=None, width=None, height=None, color=None):      
+        # denormalized points (x,y) = [0][1]
+        self.topL = topL
+        self.botR = botR
 
+        # normalized points for txt file
+        self.midX = midX
+        self.midY = midY
+        self.width = width
+        self.height = height
 
-class ImageProperties():
-    global sourceAddr, cropDim, minBboxArea, resizeDim
-    # ------------------------------------------------------------------------- creates the Img object
-    def __init__(self, srcName, clusterNum):   
-        self.srcClip = srcName[0:-4] + ".png"
-        self.srcLabel = srcName[0:-4] + ".txt"
-
-
+        self.color = color
 
     # ------------------------------------------------------------------------- print image info
     def __str__(self):
-        return "+++++++++++++++++++++++++++++++ SrcImage\n" + \
-        "Clip path: " + self.srcClip + "\n" + \
-        "Label path: " + self.srcLabel + "\n" + \
-        "+++++++++++++++++++++++++\n"
+        return "TopL: " + str(self.topL) + "\n" \
+            "BotR: " + str(self.botR) + "\n" \
+            "MidX: " + str(self.midX) + "\n" \
+            "MidY: " + str(self.midY) + "\n" \
+            "Width: " + str(self.width) + "\n" \
+            "Height: " + str(self.height) + "\n" \
+            "Color: " + str(self.color) + "\n" 
 
-################################################################### MAIN CODE
+# ------------------------------------------------------------------------- normalize points of rectangle
+    def normalize(self, imgRows, imgColmns):  
+        self.midX   = "%.6f" %  ((((self.botR[0] - self.topL[0]) * 0.5) + self.topL[0]) / float(imgColmns))
+        self.midY   = "%.6f" %  ((((self.botR[1] - self.topL[1]) * 0.5) + self.topL[1]) / float(imgRows))
+        self.width  = "%.6f" %  ((((self.botR[0] - self.topL[0]))) / float(imgColmns))
+        self.height = "%.6f" %  ((((self.botR[1] - self.topL[1]))) / float(imgRows))
+
+    def denormalize(self, imgRows, imgColmns):
+        # find normalized points
+        topLx = float(self.midX) - (0.5 * float(self.width))
+        topLy = float(self.midY) - (0.5 * float(self.height))
+        botRx = float(self.midX) + (0.5 * float(self.width))
+        botRy = float(self.midY) + (0.5 * float(self.height)) 
+
+        # find denormalized points
+        topLxDNorm = int(round(topLx * imgColmns))         
+        topLyDNorm = int(round(topLy * imgRows))
+        botRxDNorm = int(round(botRx * imgColmns))         
+        botRyDNorm = int(round(botRy * imgRows))            
+
+        # store rectangle points into rectangle object
+        self.topL = (topLxDNorm,topLyDNorm)
+        self.botR = (botRxDNorm,botRyDNorm)
+
+class Image():
+
+    # ------------------------------------------------------------------------- creates the Img object
+    def __init__(self, srcName):   
+        self.srcClip = srcName
+        self.srcLabel = (srcName[0:-4] + ".txt").replace("images", "labels")
+
+        # rectangle info
+        self.clusterid = -1
+        self.rectsSaved = []
+        self.rectsDel = []
+
+        self.marked = False
+
+        self.imgWindow = cv2.imread(self.srcClip)
+        self.imgWidth = self.imgWindow.shape[1]
+        self.imgHeight = self.imgWindow.shape[0]
+
+        if os.path.isfile(self.srcLabel):
+            self.readContent()
+        else:
+            print "No label found"
+    # ------------------------------------------------------------------------- print image info
+    def __str__(self):
+        return "+++++++++++++++++++++++++++++++ SrcImage\n" + \
+        "Clip  path: " + self.srcClip + "\n" + \
+        "Label path: " + self.srcLabel + "\n" + \
+        "Cluster number: " + str(self.clusterid) + "\n" +  \
+        "ImgWidth: " + str(self.imgWidth) + "\n" + \
+        "ImgHeight: " + str(self.imgHeight) + "\n" + \
+        "+++++++++++++++++++++++++" + "\n"
+
+    def readContent(self):                                                      
+        txtFile = open(self.srcLabel,"r")
+
+        for content in iter(txtFile):
+            contentN = content.rstrip('\n')
+            #parsed format = "class id", "center point x coord", " center point y coord", "width", "height" 
+            parsed = contentN.split()
+            #self.clusterid = parsed[0]
+            #(topL=None, botR=None, midX=None, midY=None, width=None, height=None, color=None):      # creates the Img object
+            #rectangle = Rectangle(None, None, parsed[1], parsed[2], parsed[3], parsed[4], red)
+            print parsed
+        
+        txtFile.close()
+
+
+####################################################################################################### MAIN CODE
 
 srcClipDir, srcLabelDir = getArguments()
 
+clipPathList = listOfTags(srcClipDir,".png")
+
 index_imageList, skipClipList = configReader(os.path.basename(srcClipDir))
 
-#clipPathList = listOfTags(srcClipDir,".png")
-
+for clipPath in clipPathList:
+    newClip = Image(clipPath)
+    if(len(newClip.rectsSaved) > 1):
+        print newClip
+        break
