@@ -14,6 +14,7 @@ from pprint import pprint as pp
 
 ####################################################################################################### GLOBAL VARS
 index_imageList = 0
+prev_index_imageList = 0
 autosave = False
 
 clipPathList = []
@@ -109,11 +110,7 @@ def getArguments():
     print "> Verifying source clip directory"
     ifNotDirExit(srcClipDir)
 
-    srcLabelDir = srcClipDir.replace("images", "labels")
-    print "> Verifying source label directory"
-    ifNotDirCreate(srcLabelDir) 
-
-    return srcClipDir, srcLabelDir
+    return srcClipDir
 
 # ---------------------------------------------------------------- generated list files
 def listOfTags(directoryName,dotTag):
@@ -149,6 +146,30 @@ def configReader(baseClipDir):
         markedList = []
 
     return lastIndex, markedList
+
+# ---------------------------------------------------------------- print help    
+def print_help():
+    print "\n---------------- HELP BEG ------------------------"
+    print "   MAIN KEY MAPPINGS:"
+    print "   h = Show this key layout again"
+    print "   Esc = Quit program"
+    print "   Left Arrow = Move down 1 index"
+    print "   Right Arrow = Move up 1 index"
+    print "   d = Delete a rectangle"
+    print "   r = Recover a rectangle"
+    print "   s = Save all rectangles on screen"
+    print "   m = Mark image as skipped"
+    print "   Shift = Perform action w/o saving rectangles (for autosave=1)"
+    print "   NOTE: Prompts for other keys will be asked in the terminal"
+    print "\n   RECTANGLE COLORS:"
+    print "   Green rectangles: Rectangles read from label file at startup"
+    print "   Purple rectangles: Not saved in label file"
+    print "   Yellow rectangles: Saved in label file"
+    print "\n   AUTOSAVE:"
+    print "   OFF: No progress is saved until user presses save key [s] on current image"
+    print "   ON: Rectangles for an image are saved every time the user moves to another image or exits"
+    print "       If user wishes to move on w/o saving, use Shift key before moving on or quiting"
+    print "---------------- HELP END  ------------------------"
 
 ####################################################################################################### CLASSES
 # =============================================================================================================== Rectangle object
@@ -201,62 +222,125 @@ class Rectangle():
         self.botR = (botRxDNorm,botRyDNorm)
 
 class Image():
-
+	global imgWindow
     # ------------------------------------------------------------------------- creates the Img object
-    def __init__(self, srcName):   
-        self.srcClip = srcName
-        self.srcLabel = (srcName[0:-4] + ".txt").replace("images", "labels")
+	def __init__(self, srcName):
+		self.srcClip = srcName
+		self.srcLabel = (srcName[0:-4] + ".txt").replace("images", "labels")
 
-        # rectangle info
-        self.clusterid = -1
-        self.rectsSaved = []
-        self.rectsDel = []
+		# rectangle info
+		self.clusterid = -1
+		self.rectsSaved = []
+		self.rectsDel = []
 
-        self.marked = False
+		self.marked = False
 
-        self.imgWindow = cv2.imread(self.srcClip)
-        self.imgWidth = self.imgWindow.shape[1]
-        self.imgHeight = self.imgWindow.shape[0]
+		self.img = cv2.imread(self.srcClip)
+		self.imgWidth = self.img.shape[1]
+		self.imgHeight = self.img.shape[0]
 
-        if os.path.isfile(self.srcLabel):
-            self.readContent()
-        else:
-            print "No label found"
+		if os.path.isfile(self.srcLabel) and os.stat(self.srcLabel).st_size != 0:
+			self.readContent()
+		#else:
+		#	print "No label found"
     # ------------------------------------------------------------------------- print image info
-    def __str__(self):
-        return "+++++++++++++++++++++++++++++++ SrcImage\n" + \
-        "Clip  path: " + self.srcClip + "\n" + \
-        "Label path: " + self.srcLabel + "\n" + \
-        "Cluster number: " + str(self.clusterid) + "\n" +  \
-        "ImgWidth: " + str(self.imgWidth) + "\n" + \
-        "ImgHeight: " + str(self.imgHeight) + "\n" + \
-        "+++++++++++++++++++++++++" + "\n"
+	def __str__(self):
+		return "+++++++++++++++++++++++++++++++ SrcImage\n" + \
+		"Clip  path: " + self.srcClip + "\n" + \
+		"Label path: " + self.srcLabel + "\n" + \
+		"Cluster number: " + str(self.clusterid) + "\n" +  \
+		"ImgWidth: " + str(self.imgWidth) + "\n" + \
+		"ImgHeight: " + str(self.imgHeight) + "\n" + \
+		"+++++++++++++++++++++++++" + "\n"
 
-    def readContent(self):                                                      
-        txtFile = open(self.srcLabel,"r")
+    # ------------------------------------------------------------------------- read existing txt label
+	def readContent(self):                                                      
+		txtFile = open(self.srcLabel,"r")
 
-        for content in iter(txtFile):
-            contentN = content.rstrip('\n')
-            #parsed format = "class id", "center point x coord", " center point y coord", "width", "height" 
-            parsed = contentN.split()
-            #self.clusterid = parsed[0]
-            #(topL=None, botR=None, midX=None, midY=None, width=None, height=None, color=None):      # creates the Img object
-            #rectangle = Rectangle(None, None, parsed[1], parsed[2], parsed[3], parsed[4], red)
-            print parsed
-        
-        txtFile.close()
+		for content in iter(txtFile):
+			contentN = content.rstrip('\n')
+			#parsed format = "class id", "center point x coord", " center point y coord", "width", "height" 
+			parsed = contentN.split()
+			self.clusterid = parsed[0]
+			#(topL=None, botR=None, midX=None, midY=None, width=None, height=None, color=None):      # creates the Img object
+			rectangle = Rectangle(None, None, parsed[1], parsed[2], parsed[3], parsed[4], red)
+			rectangle.denormalize(self.imgHeight,self.imgWidth)
+			self.rectsSaved.append(rectangle)
+			print rectangle
 
+	   	txtFile.close()
+    # ------------------------------------------------------------------------- draw rectangles onto window
+	def drawRects(self):            
+		for rect in self.rectsSaved:
+			cv2.rectangle(imgWindow, rect.topL, rect.botR, rect.color, 1)
 
 ####################################################################################################### MAIN CODE
 
-srcClipDir, srcLabelDir = getArguments()
+srcClipDir = getArguments()
 
 clipPathList = listOfTags(srcClipDir,".png")
 
 index_imageList, skipClipList = configReader(os.path.basename(srcClipDir))
+prev_index_imageList = index_imageList
 
 for clipPath in clipPathList:
     newClip = Image(clipPath)
-    if(len(newClip.rectsSaved) > 1):
-        print newClip
-        break
+    if (skipClipList) and (newClip in skipClipList):
+        newClip.marked = True
+    imageList.append(newClip)
+
+###################################################################
+autosave = int(raw_input("==> Enable autosave? (0=no,1=yes): "))
+print "> Autosave: " + str(bool(autosave))
+
+################################################################### image viewer
+cv2.namedWindow('ImgWindow', cv2.WINDOW_NORMAL)
+# --------------------------------------------------------------------------------------------------------------- Infinite loop till Esc exit
+print "> Entered viewer"
+print_help()
+imgWindow = imageList[index_imageList].img
+imageList[index_imageList].drawRects()
+
+while True:
+
+    # ------------------------------------------------------------------------- print info only if moved to new image (checked)
+    if prev_index_imageList != index_imageList:
+        imgWindow = imageList[index_imageList].img
+        imageList[index_imageList].drawRects()
+        print "\n=======> CURRENT IMAGE [ " + os.path.basename(imageList[index_imageList].srcClip) + " ]"
+        print imageList[index_imageList]
+
+    # ------------------------------------------------------------------------- draw rectangles and show imgWindow matrix (picture)
+    cv2.imshow('ImgWindow',imgWindow)
+    
+    # ------------------------------------------------------------------------- polls here for refresh img or a keypress
+    key = cv2.waitKey(30) & 0xFF
+    #print key
+
+    # ------------------------------------------------------------------------- add rectangles from refPt list into img's rectangles list
+    prev_index_imageList = index_imageList
+
+    # ------------------------------------------------------------------------- keypress options
+    # ------------------------------------------------ if Esc key is pressed
+    if key == ESC:
+    	print "> Bye!\n"
+    	break
+
+    # ------------------------------------------------ if left arrow key is pressed
+    elif key == LEFT: 
+        if index_imageList == 0:
+            index_imageList = len(imageList) - 1
+        else:
+            index_imageList -= 1
+
+    # ------------------------------------------------ if right arrow key is pressed
+    elif key == RIGHT:
+        if index_imageList == len(imageList) - 1:
+            index_imageList = 0
+        else:
+            index_imageList += 1
+
+    # ------------------------------------------------ to delete a rectangle
+   
+
+cv2.destroyAllWindows()

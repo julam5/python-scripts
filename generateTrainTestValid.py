@@ -170,7 +170,7 @@ for aDir in topSrcDirList:
 	imageList = pngList + jpgList + JPGList + jpegList
 
 	if not imageList:
-		print "> " + aDir +" has no images! Exiting"
+		print "> " + aDir +" has no images! Moving on!"
 		continue
 
 	random.shuffle(imageList)
