@@ -5,57 +5,20 @@ import argparse
 import csv
 import numpy as np
 import cv2
-# #######################################################################################   Global Vars
-#sourceAddr = "/home/justin/server-dataset/annotate"
-dstTopDirName = "./airdroneroi_416x416_set3"
+
+#-------------------------------------------------------------- from rosettacode
+from itertools import groupby
+from unicodedata import decomposition, name
+from pprint import pprint as pp
+#####################################################################################################################   GLOBAL VARIABLES
+txtName = "AirdroneImgSet.txt"
+topDirName = "./airdroneroi"
 cropDim = 720 #448
-resizeDim = 416
+resizeDim = 448
 countup = 0
 minBboxArea = 32 * 32
-# #######################################################################################   Functions
-# ---------------------------------------------------------------- check if path is directory, if not exit program
-def ifNotDirExit(directoryName):
-    if (os.path.isdir(directoryName) is False): 
-        print "> " + directoryName + " is not a valid directory! Exiting."
-        raise SystemExit
-    else:
-        print "> Found directory: " + directoryName 
-# ---------------------------------------------------------------- check if path is directory, if not exit program
-def ifNotDirCreate(directoryName):
-    if (os.path.isdir(directoryName) is False): 
-        print "> " + directoryName + " is not a valid directory! Creating it."
-        os.makedirs(directoryName)
-    #else:
-    #    print "> Found directory: " + directoryName 
-# ---------------------------------------------------------------- parse arguments passed
-def readArguments():
-    parser = argparse.ArgumentParser(description='')
+currClusterNum = 0
 
-    parser.add_argument('-s', type=str, default=None, dest='csvFile', help='path to .csv file')
-    parser.add_argument('-t', type=str, default=None, dest='srcTop', help='source top dir path containing /images and corresponding /labels')
-
-    parsedArgs = parser.parse_args()
-
-    if (parsedArgs.csvFile == None):    
-        print "> No csv file path entered!"
-        raise SystemExit
-
-    csvFile = os.path.expanduser(parsedArgs.csvFile)
-
-    if (parsedArgs.srcTop == None):    
-        print "> No source top directory path containing /images and /labels entered!"
-        raise SystemExit
-
-    if (parsedArgs.srcTop[-1] == '/'):
-        srcTop = parsedArgs.srcTop[0:-1]
-    else:
-        srcTop = parsedArgs.srcTop
-
-    srcTop = os.path.expanduser(srcTop)
-    print "> Verifying source clip directory"
-    ifNotDirExit(srcTop)
-
-    return csvFile, srcTop
 # #######################################################################################   Classes
 # ============================================================================== Rectangle object
 class Rectangle():
@@ -151,13 +114,10 @@ class CropImage():
 class SrcImage():
 	global cropDim, minBboxArea, resizeDim
 # ------------------------------------------------------------------------- creates the Img object
-	def __init__(self, srcClip, clusterNum, sourceAddr):   
-		self.baseClip = os.path.basename(srcClip)
-		self.baseDir = os.path.dirname(srcClip)
-		self.baseLabel = self.baseClip.rstrip('.png') + ".txt"
-		self.srcClip = sourceAddr + "/images/" + srcClip
-		self.srcLabel = sourceAddr + "/labels/" + srcClip.rstrip('.png') + ".txt"
-
+	def __init__(self, srcClip, clusterNum):   
+		self.baseClipName = os.path.basename(srcClip).rstrip('.png')
+		self.srcClip = srcClip
+		self.srcLabel = (srcClip.replace("images","labels")).rstrip('.png') + ".txt"
 		self.dstClip = None
 		self.dstLabel = None
 
@@ -177,12 +137,14 @@ class SrcImage():
 # ------------------------------------------------------------------------- print image info
 	def __str__(self):
 		return "+++++++++++++++++++++++++++++++ SrcImage\n" + \
-		"Clip path: " + self.srcClip + "\n" + \
+		"SrcClip path: " + self.srcClip + "\n" + \
+		"SrcLabel path: " + self.srcLabel + "\n" + \
 		"Cluster number: " + str(self.clusterNum) + "\n" +	\
-		"Label path: " + self.srcLabel + "\n" + \
 		"ImgWidth: " + str(self.imgWidth) + "\n" + \
 		"ImgHeight: " + str(self.imgHeight) + "\n" \
-		+ "+++++++++++++++++++++++++\n"
+		"DstClip path: " + self.dstClip + "\n" + \
+		"DstLabel path: " + self.dstLabel + "\n" + \
+		"+++++++++++++++++++++++++\n"
 
 	def setOrigImgDim(self):
 		self.imgWidth = self.imgWindow.shape[1]
@@ -209,7 +171,7 @@ class SrcImage():
 		for rectangle in self.rectsFetched:
 			rectangle.denormalize(self.imgHeight, self.imgWidth)
 			#if (len(self.rectsFetched) > 1):
-			#	print rectangle
+			print rectangle
 
 	def bboxAreaLimit(self):
 		for rectangle in self.rectsFetched:
@@ -218,12 +180,16 @@ class SrcImage():
 		return False
 
 	def createClusterDir(self):
-		clusterDirName = "/cluster" + self.clusterNum
-		ifNotDirCreate(dstTopDirName + "/images" + clusterDirName)
-		ifNotDirCreate(dstTopDirName + "/labels" + clusterDirName)
+		clusterDirName = "/cluster" + str(self.clusterNum)
+		#if (os.path.isdir(topDirName + "/images" + clusterDirName) is False):
+		#	print "> " + clusterDirName + " doesn't exist! Creating " + clusterDirName
+		#	os.makedirs(topDirName + "/images" + clusterDirName)
+		#if (os.path.isdir(topDirName + "/labels" + clusterDirName) is False):
+		#	os.makedirs(topDirName + "/labels" + clusterDirName)
 
-		self.dstClip = dstTopDirName + "/images" + clusterDirName 
-		self.dstLabel = dstTopDirName + "/labels" + clusterDirName 
+	def setDstVars(self, index):		
+		self.dstClip = topDirName + "/images" + "/cluster" + str(self. clusterNum) + "/" + self.baseClipName + "_" + str(index) + ".png"
+		self.dstLabel = topDirName + "/labels" + "/cluster" + str(self. clusterNum) + "/" + self.baseClipName + "_" + str(index) + ".txt"
 
 	def createCroppedImg(self, index):
 
@@ -246,8 +212,7 @@ class SrcImage():
 			startXcrop = rectangle.midXDeNorm-(cropDim/2)
 
 		self.cropWindow = self.imgWindow[startYcrop:(startYcrop+cropDim), startXcrop:(startXcrop+cropDim)]
-		#print self.dstClip + "/" + self.baseDir +  "_" + self.baseClip[:-4] + "_crop" + str(index) + ".png"
-		#cv2.imwrite(self.dstClip + "/" + self.baseDir +  "_" + self.baseClip[:-4] + "_crop" + str(index) + ".png", self.cropWindow)
+		#cv2.imwrite(self.dstClip + "/crop720_" + str(index) + "_" + self.baseClip, self.cropWindow)
 		self.currentCroppedClip = CropImage(startXcrop,startYcrop)
 		#if (len(self.rectsFetched) > 1):
 		#	print startXcrop
@@ -275,7 +240,7 @@ class SrcImage():
 			#print rectangle
 
 	def saveNewLabel(self,index):
-		savingFile = open(self.dstLabel + "/" + self.baseDir +  "_" + self.baseLabel[:-4] + "_crop" + str(index) + ".txt", "wb")
+		savingFile = open(self.dstLabel + "/crop" + str(index) + "_" + self.baseLabel, "wb")
 		for rectangle in self.rectsCropped:
 			item = str(self.clusterNum) + " " + str(rectangle.midXNorm) + " " + str(rectangle.midYNorm) + " " + str(rectangle.widthNorm) + " " + str(rectangle.heightNorm)
 			savingFile.write("%s\n" % item)
@@ -285,50 +250,145 @@ class SrcImage():
 
 	def resizeCrop(self):
 		r = float(resizeDim) / float (cropDim)
-		dim = (resizeDim, int (cropDim * r + 0.5))
-		#print "r = " + str(int(cropDim * r + 0.5)) + " , dim = " + str(dim)
-		self.resizeWindow = cv2.resize(self.imgWindow, dim, interpolation = cv2.INTER_LINEAR) #cv2.resize(self.cropWindow, dim, interpolation = cv2.INTER_LINEAR)
-		cv2.imwrite(self.dstClip + "/" + self.baseDir +  "_" + self.baseClip[:-4] + ".png", self.resizeWindow) # + "_crop" + str(index) 
+		dim = (resizeDim, int (cropDim * r))
+		self.resizeWindow = cv2.resize(self.cropWindow, dim, interpolation = cv2.INTER_LINEAR)
+		#cv2.imwrite(self.dstClip + "/crop" + str(index) + "_" + self.baseClip, self.resizeWindow)
 
-# #######################################################################################   MAIN CODE START
-addrCsvSource, sourceAddr = readArguments()
+# =============================================================================================================== Natural sorting 
+#-------------------------------------------------------------- from rosettacode
+commonleaders = ['the'] # lowercase leading words to ignore
+ 
+hexdigits = set('0123456789abcdef')
+decdigits = set('0123456789')   # Don't use str.isnumeric
+ 
+def splitchar(c):
+    ' De-ligature. De-accent a char'
+    de = decomposition(c)
+    if de:
+        de = [d for d in de.split()
+                  if all(c.lower()
+                         in hexdigits for c in d)]
+        n = name(c, c).upper()
+        if 'LIGATURE' in n:
+            base += others.pop(0)
+    else:
+        base = c
+    return base
+ 
+ 
+def sortkeygen(s):
+    s = unicode(s).strip()
+    s = ' '.join(s.split())
+    s = s.lower()
+    words = s.split()
+    if len(words) > 1 and words[0] in commonleaders:
+        s = ' '.join( words[1:])
+    s = ''.join(splitchar(c) for c in s)
+    s = [ int("".join(g)) if isinteger else "".join(g)
+          for isinteger,g in groupby(s, lambda x: x in decdigits)]
+ 
+    return s
+ 
+def naturalsort(items):
+    return sorted(items, key=sortkeygen)
+# =============================================================================================================== Natural sorting 
+# =============================================================================================================== Generate clipFile.txt
+def generate_clipfile(clipDirName):
+    print "> Generating img list"
+
+    tag1=".png" #
+    nameList = []
+
+    for root, dirs, files in os.walk(clipDirName, topdown=False):
+        for name in files:
+            if (name.rfind(tag1) != -1 ):
+                nameList.append(os.path.join(root, name))          
+
+    return naturalsort(nameList)
+ 
+def saveNatSort(clipNames):
+    savingFile = open(txtName, "wb")
+    for name in clipNames:
+        savingFile.write("%s\n" % name)
+    savingFile.close()
+# ##############################################################################################################################################################################
+# #####################################################################################################################   MAIN CODE START
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# --------------------------------------------------------------------------------------------------------------- Check for config file (checked)
+parser = argparse.ArgumentParser(description='Img editor')
+
+parser.add_argument('-s', type=str, default=''  , dest='clipSource' , help='top parent source directory name with jpg/JPEG images')
+
+parsedArgs = parser.parse_args()
+
+if (len(parsedArgs.clipSource) != 0 and parsedArgs.clipSource[len(parsedArgs.clipSource)-1] == '/'):
+    clipSource = parsedArgs.clipSource[0:-1]
+else:
+    clipSource = parsedArgs.clipSource
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+if (os.path.isdir(clipSource) is False): 
+    print "> " + clipSource + " is not a valid path!"
+    raise SystemExit
+
+clipNames = generate_clipfile(clipSource)
+
+# --------------------------------------------------------------------------------------------------------- if clipNames is empty, exit (checked)
+if not clipNames:
+    print "> Clip list is empty!"
+    raise SystemExit
+
+
+# --------------------------------------------------------------------------------------------------------- if clipNames is empty, exit (checked)
+if not clipNames:
+    print "> Clip list is empty!"
+    raise SystemExit
+#else:
+#    saveNatSort(clipNames)
 
 # ---------------------------------------------------------------- create top dir and subdirs in current dir of script
-ifNotDirCreate(dstTopDirName)
-ifNotDirCreate(dstTopDirName + "/images")
-ifNotDirCreate(dstTopDirName + "/labels")
+if (os.path.isdir(topDirName) is False):
+	print "> " + topDirName + " doesn't exist! Creating " + topDirName
+	os.makedirs(topDirName)
+	os.makedirs(topDirName + "/images")
+	os.makedirs(topDirName + "/labels")
 
 # ----------------------------------------------------
-with open(addrCsvSource, 'rb') as f:
-    reader = csv.reader(f)
-    for row in reader:
-        currentClip = SrcImage(row[0],row[1], sourceAddr)
-        currentClip.setOrigImgDim()
-        #currentClip.readContent()
-        #currentClip.denormalizeRectsFetched()
+for row in clipNames:
 
-        if (currentClip.bboxAreaLimit()):
-        	continue
+	checkClusterNum = "cluster" + str(currClusterNum)
+	if (row.rfind(checkClusterNum) == -1 ):
+		currClusterNum += 1
 
-        currentClip.createClusterDir()
-        currentClip.resizeCrop()
+	currentClip = SrcImage(row,currClusterNum)
+	currentClip.setOrigImgDim()
+	currentClip.readContent()
+	currentClip.denormalizeRectsFetched()
 
+	#if (currentClip.bboxAreaLimit()):
+	#	continue
 
-        #for index in range(0,len(currentClip.rectsFetched)):
-	        #currentClip.createCroppedImg(index)
-	        #currentClip.findBboxesWithinCrop(index)
-	        #currentClip.createNewBboxVals(index)
-	        #currentClip.normalizeNewBbox(index)
-	        #currentClip.saveNewLabel(index)
-	        #currentClip.resizeCrop()
+	currentClip.createClusterDir()
 
-        #if (countup > 20):
-        #	break
-        #else:
-        #	countup += 1
-        #print countup
+	for index in range(0,len(currentClip.rectsFetched)):
+		currentClip.setDstVars(index)
+	print currentClip
 
+#	    currentClip.createCroppedImg(index)
+#	    currentClip.findBboxesWithinCrop(index)
+#	    currentClip.createNewBboxVals(index)
+#	    currentClip.normalizeNewBbox(index)
+#	    currentClip.saveNewLabel(index)
+#	    currentClip.resizeCrop()
 
-
+	if (countup > 20):
+		break
+	else:
+		countup += 1
+	#print countup
 
 

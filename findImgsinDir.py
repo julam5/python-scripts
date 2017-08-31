@@ -16,96 +16,96 @@ hexdigits = set('0123456789abcdef')
 decdigits = set('0123456789')   # Don't use str.isnumeric
  
 def splitchar(c):
-    ' De-ligature. De-accent a char'
-    de = decomposition(c)
-    if de:
-        de = [d for d in de.split()
-                  if all(c.lower()
-                         in hexdigits for c in d)]
-        n = name(c, c).upper()
-        if 'LIGATURE' in n:
-            base += others.pop(0)
-    else:
-        base = c
-    return base
+	' De-ligature. De-accent a char'
+	de = decomposition(c)
+	if de:
+		de = [d for d in de.split()
+				  if all(c.lower()
+						 in hexdigits for c in d)]
+		n = name(c, c).upper()
+		if 'LIGATURE' in n:
+			base += others.pop(0)
+	else:
+		base = c
+	return base
  
  
 def sortkeygen(s):
-    s = unicode(s).strip()
-    s = ' '.join(s.split())
-    s = s.lower()
-    words = s.split()
-    if len(words) > 1 and words[0] in commonleaders:
-        s = ' '.join( words[1:])
-    s = ''.join(splitchar(c) for c in s)
-    s = [ int("".join(g)) if isinteger else "".join(g)
-          for isinteger,g in groupby(s, lambda x: x in decdigits)]
+	s = unicode(s).strip()
+	s = ' '.join(s.split())
+	s = s.lower()
+	words = s.split()
+	if len(words) > 1 and words[0] in commonleaders:
+		s = ' '.join( words[1:])
+	s = ''.join(splitchar(c) for c in s)
+	s = [ int("".join(g)) if isinteger else "".join(g)
+		  for isinteger,g in groupby(s, lambda x: x in decdigits)]
  
-    return s
+	return s
  
 def naturalsort(items):
-    return sorted(items, key=sortkeygen)
+	return sorted(items, key=sortkeygen)
 
 # ---------------------------------------------------------------- check if path is directory, if not exit program
 def ifNotDirExit(directoryName):
-    if (os.path.isdir(directoryName) is False): 
-        print "> " + directoryName + " is not a valid directory! Exiting."
-        raise SystemExit
-    else:
-        print "> Found directory: " + directoryName 
+	if (os.path.isdir(directoryName) is False): 
+		print "> " + directoryName + " is not a valid directory! Exiting."
+		raise SystemExit
+	else:
+		print "> Found directory: " + directoryName 
 # ---------------------------------------------------------------- check if path is directory, if not exit program
 def ifNotDirCreate(directoryName):
-    if (os.path.isdir(directoryName) is False): 
-        print "> " + directoryName + " is not a valid directory! Creating it."
-        os.makedirs(directoryName)
-    #else:
-        #print "> Found directory: " + directoryName 
+	if (os.path.isdir(directoryName) is False): 
+		print "> " + directoryName + " is not a valid directory! Creating it."
+		os.makedirs(directoryName)
+	#else:
+		#print "> Found directory: " + directoryName 
 # ---------------------------------------------------------------- parse arguments passed
 def getArguments():
-    parser = argparse.ArgumentParser(description='')
+	parser = argparse.ArgumentParser(description='')
 
-    parser.add_argument('-s', type=str, default=None, dest='srcTop', help='source clip dir path')
+	parser.add_argument('-s', type=str, default=None, dest='srcTop', help='source clip dir path')
 
-    parsedArgs = parser.parse_args()
+	parsedArgs = parser.parse_args()
 
-    if (parsedArgs.srcTop == None):    
-        print "> No /images directory path entered!"
-        raise SystemExit
+	if (parsedArgs.srcTop == None):    
+		print "> No /images directory path entered!"
+		raise SystemExit
 
-    if (parsedArgs.srcTop[-1] == '/'):
-        srcTop = parsedArgs.srcTop[0:-1]
-    else:
-        srcTop = parsedArgs.srcTop
+	if (parsedArgs.srcTop[-1] == '/'):
+		srcTop = parsedArgs.srcTop[0:-1]
+	else:
+		srcTop = parsedArgs.srcTop
 
-    srcTop = os.path.expanduser(srcTop)
-    print "> Verifying source clip directory"
-    ifNotDirExit(srcTop)
+	srcTop = os.path.expanduser(srcTop)
+	print "> Verifying source clip directory"
+	ifNotDirExit(srcTop)
 
-    return srcTop
+	return srcTop
 
 # ---------------------------------------------------------------- find files
 def findFiles(directoryName,dotTag):
-    print "> Generating list for " + dotTag + " tags" 
-    
-    nameList = []
+	print "> Generating list for " + dotTag + " tags" 
+	
+	nameList = []
 
-    for root, dirs, files in os.walk(directoryName):
-        for name in files:
-            if (name.rfind(dotTag) != -1):
-                nameList.append(os.path.join(root, name))
+	for root, dirs, files in os.walk(directoryName):
+		for name in files:
+			if (name.rfind(dotTag) != -1):
+				nameList.append(os.path.join(root, name))
 
-    if not nameList:
-        print "> List of tags is empty!"
-        raise SystemExit
+	if not nameList:
+		print "> List of tags is empty!"
+		raise SystemExit
 
-    return naturalsort(nameList)
+	return naturalsort(nameList)
 
 # ---------------------------------------------------------------- save list as txt file
 def saveListInTxt(givenList):
-    savingFile = open("listFiles.txt", "wb")
-    for name in givenList:
-        savingFile.write("%s\n" % name)
-    savingFile.close()
+	savingFile = open("listFiles.txt", "wb")
+	for name in givenList:
+		savingFile.write("%s\n" % name)
+	savingFile.close()
 
 ####################################################################################################### GLOBAL VARS
 fileList = []
@@ -120,8 +120,8 @@ fileList = findFiles(srcTopDir, ".png")
 saveListInTxt(fileList)
 #ifNotDirCreate("./labels")
 #for item in problemList:
-    #print item
+	#print item
 #    dstPath = findDstPath(item)
-    #print "mv " + item + " " + dstPath
+	#print "mv " + item + " " + dstPath
 #    subprocess.call("mv " + item + " " + dstPath, shell=True)
-    #break
+	#break

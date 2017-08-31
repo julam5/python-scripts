@@ -248,7 +248,7 @@ class Image():
         subDir = os.path.dirname(imgName)
         lastSlashIndex = subDir.rfind('/')
 
-        self.txtName = destName + '/' + subDir[lastSlashIndex+1:] + '/' + stripped1 + '.txt'
+        self.txtName = destName.rstrip('.png') + ".txt" #+ '/' + subDir[lastSlashIndex+1:] + '/' + stripped1 + '.txt'
 
 
         self.leafDirPath = os.path.dirname(self.txtName)
@@ -493,12 +493,13 @@ else:
 
 # --------------------------------------------------------------------------------------------------------------- create image array
 for image in clipNames:
-    pic = Image(image,'./labels')
+    label = image.replace("images", "labels")
+    pic = Image(image,label)
     if (markedList) and (image in markedList):
         pic.marked = True
-    #imageList.append(pic)
-    if os.path.isfile(pic.txtName) and os.stat(pic.txtName).st_size != 0: # enable only if checking labels
-	   imageList.append(pic)
+    imageList.append(pic)
+    #if os.path.isfile(pic.txtName) and os.stat(pic.txtName).st_size != 0: # enable only if checking labels
+	#   imageList.append(pic)
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # --------------------------------------------------------------------------------------------------------------- Enable autosave?
