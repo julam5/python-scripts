@@ -1,4 +1,16 @@
-#!/usr/bin/env python
+"""
+Renames images and respective labels to start at 1.
+
+EX. if clip11 starts at 145
+
+    clip11/clip11-145.png -> clip11/clip11-1.png
+    clip11/clip11-145.txt -> clip11/clip11-1.txt
+
+Usage:
+------
+	python startFromOne.py -s [<path to /images directory>]
+	EX. python startFromOne.py -s /home/ubuntu/annotate_tracking/images
+"""
 
 import subprocess
 import sys
@@ -83,9 +95,25 @@ def getArguments():
 
 	return srcTop
 
+# ---------------------------------------------------------------- list subdirs
+def listSubdirs(directoryName):
+	print "> Generating list of subdirs for " + directoryName 
+	
+	nameList = []
+
+	for root, dirs, files in os.walk(directoryName):
+		for name in dirs:
+			nameList.append(os.path.join(root, name))
+
+	if not nameList:
+		print "> List of subdirs is empty!"
+		raise SystemExit
+
+	return naturalsort(nameList)
+
 # ---------------------------------------------------------------- find files
 def findFiles(directoryName,dotTag):
-	print "> Generating list for " + dotTag + " tags" 
+	#print "> Generating list for " + dotTag + " tags" 
 	
 	nameList = []
 
@@ -107,14 +135,64 @@ def saveListInTxt(givenList):
 		savingFile.write("%s\n" % name)
 	savingFile.close()
 
+
+# ===================================================================
+# ===================================================================
+class ClipSet:
+
+	def __init__(self, clipDir_path):
+		self.imgs_path = clipDir_path
+		self.labels_path = clipDir_path.replace("images", "labels")
+		self.status = False
+		self.clipList = []
+
+	def getClipList(self):
+		self.clipList = findFiles(self.imgs_path, ".png")
+		#print self.clipList[0]
+		#saveListInTxt(self.clipList)
+
+	def checkIfNotOne(self):
+		if ((self.clipList[0]).rfind("-1.png") == -1):
+			print self.clipList[0] + " is first item"
+			self.status = True
+		#else:
+		#	print "Skipping " + os.path.basename(self.imgs_path)
+
+	def mvFiles(self):
+		if self.status:
+			counter = 1
+			for item in self.clipList:
+				cmd = "mv " + item + " " + str(self.imgs_path) + "/" + os.path.basename(self.imgs_path) + "-" + str(counter) + ".png"
+				#print cmd
+				subprocess.call(cmd, shell=True)
+
+
+				temp  = item.replace("images", "labels")
+				item_label_path = temp.replace(".png", ".txt")
+				if(os.path.exists(item_label_path)):
+					cmd = "mv " + item_label_path + " " + str(self.labels_path) + "/" + os.path.basename(self.labels_path) + "-" + str(counter) + ".txt"
+					#print cmd
+					subprocess.call(cmd, shell=True)
+				counter += 1
+
 ####################################################################################################### GLOBAL VARS
-fileList = []
+subdirList = []
 readContentList = []
 
 ####################################################################################################### MAIN CODE
 ####################################################################################################### MAIN CODE
-srcTopDir = getArguments()
+srcTopDir_images = getArguments()
 
-fileList = findFiles(srcTopDir, ".png")
+subdirList = listSubdirs(srcTopDir_images)
 
-saveListInTxt(fileList)
+#saveListInTxt(subdirList)
+
+
+for item in subdirList:
+	a_clipset = ClipSet(item)
+	a_clipset.getClipList()
+	a_clipset.checkIfNotOne()
+	a_clipset.mvFiles()
+	#break
+
+

@@ -14,7 +14,7 @@ from scipy import misc
 
 # Example batch of images.
 # The array has shape (32, 64, 64, 3) and dtype uint8.
-image = misc.imread("/home/justin/Downloads/test/crop0_clip11-1252.png")
+image = misc.imread("/home/justin/annotate_tracking/images/clip21/clip21-116.png")
 #images = [image] * 64 
 # np.array(
 # 	[ia.quokka(size=(64, 64)) for _ in range(32)],

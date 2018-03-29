@@ -1,12 +1,5 @@
 #!/usr/bin/env python
 
-"""
-Reads all images in input /images directory and augments each .png or .jpg into an output directory called "./aug_images/"
-
-Usage:
-------
-	python imgaugTest.py -s [<path to /images>]
-"""
 
 from __future__ import print_function, division
 import imgaug as ia
